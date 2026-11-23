@@ -330,3 +330,18 @@ test('cote verrouillée : une autre correction qui la change est détectée', ()
   setWallLength(prev2, side.id, 400, { fixed: prev2.nodes[side.a].y === 0 ? 'a' : 'b' });
   assert.equal(brokenLocks(prev, prev2), null, 'allonger dans l’autre sens ne touche pas la cote');
 });
+
+test('mesure du bord d’une arche à la fin du mur : l’arche ne bouge pas', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const top = p.walls.find((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  const left = p.nodes[top.a].x === 0;
+  const pos = left ? 200 : 400; // centre de l'arche, 100 de large
+  const op = addOpening(p, top.id, pos, 'arch', { w: 100 });
+  const before = openingGeom(p, op).c.x;
+  // du bord droit de l'arche (x=250 ou 350) au bout droit du mur (x=600) : +50 cm
+  const edge = before + 50;
+  assert.ok(adjustMeasure(p, { x: edge, y: 0 }, { x: 600, y: 0 }, 600 - edge + 50, { move: 'b' }));
+  assert.equal(Math.round(openingGeom(p, op).c.x), Math.round(before));
+  assert.equal(Math.max(...Object.values(p.nodes).map((n) => n.x)), 650);
+});

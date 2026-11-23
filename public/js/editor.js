@@ -664,6 +664,14 @@ export class Editor {
       const wi = G.wallInfo(plan, w);
       for (const q of [wi.a, wi.b]) for (const sg of [-1, 1]) pts.push({ x: q.x + wi.nx * sg * w.t / 2, y: q.y + wi.ny * sg * w.t / 2 });
     }
+    // bords des ouvertures (portes, arches, fenêtres…) : sur les deux faces et à l'axe
+    for (const o of plan.openings) {
+      const g = G.openingGeom(plan, o);
+      if (!g) continue;
+      for (const sd of [-1, 1]) for (const off of [-g.t / 2, 0, g.t / 2]) {
+        pts.push({ x: g.c.x + g.ux * sd * o.w / 2 + g.nx * off, y: g.c.y + g.uy * sd * o.w / 2 + g.ny * off });
+      }
+    }
     let best = null, bd = 20 / S;
     for (const q of pts) {
       const d = G.dist(q, p);

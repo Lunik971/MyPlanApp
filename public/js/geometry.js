@@ -853,8 +853,22 @@ export function adjustMeasure(plan, A, B, newLen, { move = 'b' } = {}) {
   const limit = fwd ? pr(B) - tol(B) - 0.5 : pr(A) + tol(A) + 0.5;
   const k = fwd ? delta : -delta;
   const hit = (o) => (fwd ? pr(o) >= limit : pr(o) <= limit);
+  // les ouvertures sont repérées depuis le début de leur mur : on les replace après le décalage
+  const centers = plan.openings.map((op) => {
+    const g = openingGeom(plan, op);
+    return g ? { op, c: { ...g.c } } : null;
+  }).filter(Boolean);
   for (const o of [...Object.values(plan.nodes), ...plan.furniture, ...plan.rooms]) {
     if (hit(o)) { o.x = round1(o.x + dx * k); o.y = round1(o.y + dy * k); }
   }
+  for (const { op, c } of centers) {
+    const w = plan.walls.find((q) => q.id === op.wall);
+    if (!w) continue;
+    const nc = hit(c) ? { x: c.x + dx * k, y: c.y + dy * k } : c;
+    const wi = wallInfo(plan, w);
+    op.pos = round1((nc.x - wi.a.x) * wi.ux + (nc.y - wi.a.y) * wi.uy);
+    clampOpening(plan, op);
+  }
   return true;
 }
+
