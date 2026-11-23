@@ -184,6 +184,20 @@ try {
   ok(added === 8, `mur tracé au doigt (${added} murs)`);
   await ev(() => window.__app.editor.finishDraft());
 
+  console.log('Clic droit = quitter le mode en cours');
+  await ev(() => window.__app.editor.setTool('wall'));
+  await page.waitForTimeout(250);
+  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 620, y1: 480 }));
+  await tapPlan(100, 450);
+  const bx = await canvasBox();
+  await page.mouse.click(bx.x + 150, bx.y + 150, { button: 'right' });
+  const st = await ev(() => ({ tool: window.__app.editor.tool, draft: window.__app.editor.draft, walls: window.__app.editor.plan.walls.length }));
+  ok(st.tool === 'select' && st.draft === null, `clic droit pendant le tracé → retour au mode sélection (${st.tool})`);
+  ok(st.walls === 8, 'le clic droit n’a pas ajouté de mur');
+  await ev(() => window.__app.editor.setTool('opening'));
+  await page.mouse.click(bx.x + 150, bx.y + 150, { button: 'right' });
+  ok((await ev(() => window.__app.editor.tool)) === 'select', 'clic droit en mode porte/fenêtre → sélection');
+
   console.log('Retour liste');
   await page.click('#btn-back');
   await page.waitForSelector('#plan-list .plan-item');

@@ -325,7 +325,15 @@ export class Editor {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
+  // Clic droit (souris) : quitte le mode en cours et revient à la sélection ;
+  // en mode sélection, il désélectionne.
+  rightClick() {
+    if (this.tool !== 'select') this.setTool('select');
+    else if (this.sel) this.select(null);
+  }
+
   onDown(e) {
+    if (e.pointerType === 'mouse' && e.button === 2) { e.preventDefault(); this.rightClick(); return; }
     if (this.pointers.size === 0) this.locked = false;
     this.canvas.setPointerCapture?.(e.pointerId);
     const sp = this.pos(e);
@@ -334,7 +342,7 @@ export class Editor {
     if (this.pointers.size > 2 || this.locked) return;
     const g = { kind: 'none', start: sp, startPlan: this.toPlan(sp), moved: false, snap: false, view0: { ...this.view } };
     this.gesture = g;
-    if (e.pointerType === 'mouse' && e.button !== 0) { g.kind = 'pan'; return; }
+    if (e.pointerType === 'mouse' && e.button !== 0) { g.kind = 'pan'; return; } // bouton du milieu : déplacer la vue
 
     if (this.tool === 'select') {
       const h = this.hit(sp);

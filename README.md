@@ -9,6 +9,7 @@ Appli web (PWA, pensée pour le mobile) pour **dessiner le plan d'un appartement
 - **Pièces détectées automatiquement** dès que des murs se referment ; surface intérieure (épaisseur des murs déduite), périmètre, côtés, nom et couleur ; total.
 - **Portes** (simple, double, sens et charnière réglables), **fenêtres**, **baies vitrées**, **ouvertures** : largeur, hauteur, allège libres ; glissables le long des murs.
 - **Mobilier** à l'échelle (catalogue + dimensions personnalisées), déplacement, rotation, duplication.
+- Sur PC : **clic droit = quitter le mode en cours** (retour à la sélection), `Échap` idem, molette = zoom, clic molette = déplacer la vue, `Suppr` = supprimer.
 - Annuler / rétablir, zoom et déplacement à deux doigts, export PNG, duplication d'un plan (pour tester un autre aménagement).
 - Enregistrement automatique, copie locale en cas de coupure réseau, détection de modification depuis un autre appareil.
 - Installable sur l'écran d'accueil (Android/iOS/desktop).
