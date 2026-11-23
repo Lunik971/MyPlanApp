@@ -741,8 +741,9 @@ export class Editor {
       if (G.dist(m.A, pv) < 1) return;
       m.B = pv;
       this.snapshot();
-      const sm = G.addMeasure(this.plan, m.A, pv); // la mesure reste affichée sur le plan
+      const sm = G.addMeasure(this.plan, m.A, pv); // la mesure reste affichée sur le plan…
       m.id = sm?.id || null;
+      if (sm) G.upsertLock(this.plan, { kind: 'measure', measure: sm.id, len: G.dist(m.A, pv) }); // …et verrouillée
       this.afterChange();
     }
     m.preview = null;
@@ -753,8 +754,7 @@ export class Editor {
   measInfo() {
     const m = this.meas;
     if (!m?.B) return null;
-    const spec = G.gapSpec(this.plan, m.A, m.B);
-    return { len: G.dist(m.A, m.B), lockable: !!spec, locked: !!(spec && G.findLock(this.plan, spec)) };
+    return { len: G.dist(m.A, m.B), lockable: !!m.id, locked: !!(m.id && G.findLock(this.plan, { kind: 'measure', measure: m.id })) };
   }
 
   resetMeasure() {
@@ -768,14 +768,14 @@ export class Editor {
     const m = this.meas;
     if (!m?.id) return this.resetMeasure();
     const id = m.id;
-    this.mutate((plan) => { plan.measures = plan.measures.filter((q) => q.id !== id); });
+    this.mutate((plan) => G.removeMeasure(plan, id));
     this.resetMeasure();
   }
 
   toggleMeasureLock() {
     const m = this.meas;
-    const spec = m?.B && G.gapSpec(this.plan, m.A, m.B);
-    if (!spec) { this.hooks.toast?.('Posez les deux points sur des murs parallèles pour verrouiller'); return; }
+    if (!m?.id) return;
+    const spec = { kind: 'measure', measure: m.id, len: G.dist(m.A, m.B) };
     const ex = G.findLock(this.plan, spec);
     this.snapshot();
     if (ex) G.removeLock(this.plan, ex.id); else G.upsertLock(this.plan, spec);
@@ -783,11 +783,37 @@ export class Editor {
     this.hooks.meas?.(m);
   }
 
+  // Modifier une mesure conservée (outil Sélection) : même logique que la saisie de l'outil Mesure
+  applySelectedMeasure(len, move = 'b') {
+    const mm = this.sel?.type === 'measure' ? this.selected : null;
+    const e = mm && G.measureEnds(this.plan, mm);
+    if (!e || !(len >= 1)) return false;
+    const ex = G.findLock(this.plan, { kind: 'measure', measure: mm.id });
+    this.snapshot();
+    if (!G.adjustMeasure(this.plan, e.A, e.B, len, { move })) { this.undoStack.pop(); return false; }
+    if (!this.guardLocks(ex?.id)) return false;
+    G.upsertLock(this.plan, { kind: 'measure', measure: mm.id, len });
+    this.afterChange();
+    return true;
+  }
+
+  toggleSelectedMeasureLock() {
+    const mm = this.sel?.type === 'measure' ? this.selected : null;
+    if (!mm) return;
+    const e = G.measureEnds(this.plan, mm);
+    if (!e) return;
+    const spec = { kind: 'measure', measure: mm.id, len: G.dist(e.A, e.B) };
+    const ex = G.findLock(this.plan, spec);
+    this.snapshot();
+    if (ex) G.removeLock(this.plan, ex.id); else G.upsertLock(this.plan, spec);
+    this.afterChange();
+  }
+
   // Saisie de la cote : décale ce qui est au-delà de B (ou en deçà de A), puis verrouille
   applyMeasure(len, move = 'b') {
     const m = this.meas;
     if (!m?.B || !(len >= 1)) return false;
-    const spec = G.gapSpec(this.plan, m.A, m.B);
+    const spec = m.id ? { kind: 'measure', measure: m.id } : null;
     const ex = spec && G.findLock(this.plan, spec);
     const L = G.dist(m.A, m.B), dx = (m.B.x - m.A.x) / L, dy = (m.B.y - m.A.y) / L;
     this.snapshot();
@@ -984,7 +1010,7 @@ export class Editor {
     if (s.type === 'wall') this.mutate((plan) => G.removeWall(plan, s.id));
     else if (s.type === 'opening') this.mutate((plan) => { plan.openings = plan.openings.filter((o) => o.id !== s.id); });
     else if (s.type === 'furniture') this.mutate((plan) => { plan.furniture = plan.furniture.filter((f) => f.id !== s.id); });
-    else if (s.type === 'measure') this.mutate((plan) => { plan.measures = plan.measures.filter((m) => m.id !== s.id); });
+    else if (s.type === 'measure') this.mutate((plan) => G.removeMeasure(plan, s.id));
     else if (s.type === 'room') {
       const r = this.selected;
       if (r?.labelId) this.mutate((plan) => { plan.rooms = plan.rooms.filter((l) => l.id !== r.labelId); });
@@ -1030,6 +1056,7 @@ export class Editor {
       dimRef: this.dimRef,
       dimDelta: this.dimDelta(),
       meas: this.tool === 'measure' ? this.meas : null,
+      isMeasureLocked: (id) => (this.plan.locks || []).some((l) => l.kind === 'measure' && l.measure === id),
       isLocked: (wall, side) => (this.plan.locks || []).some((l) => (l.kind === 'wall' || l.kind === 'chain') && l.wall === wall && l.side === side && l.ref === this.dimRef) || false,
     });
   }

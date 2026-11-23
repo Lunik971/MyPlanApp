@@ -405,7 +405,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
       }
       ctx.stroke();
       ctx.restore();
-      haloText(ctx, fmtLen(d.len), X(d.mid.x), Y(d.mid.y), { fg: on ? BLUE : '#3d5f9c', font: '600 11px system-ui, sans-serif' });
+      haloText(ctx, (o.isMeasureLocked?.(m.id) ? '🔒 ' : '') + fmtLen(d.len), X(d.mid.x), Y(d.mid.y), { fg: on ? BLUE : '#3d5f9c', font: '600 11px system-ui, sans-serif' });
     }
   }
 

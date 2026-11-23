@@ -768,6 +768,11 @@ export function pointInFurniture(p, f) {
 //  {kind:'gap',   wa, wb, dx, dy, sa, sb, len}   écart entre deux murs parallèles (outil Mesure)
 
 export function lockValue(plan, layout, lk) {
+  if (lk.kind === 'measure') {
+    const m = (plan.measures || []).find((q) => q.id === lk.measure);
+    const e = m && measureEnds(plan, m);
+    return e ? dist(e.A, e.B) : null;
+  }
   if (lk.kind === 'gap') {
     const wa = plan.walls.find((q) => q.id === lk.wa), wb = plan.walls.find((q) => q.id === lk.wb);
     const A = wa && plan.nodes[wa.a], B = wb && plan.nodes[wb.a];
@@ -783,7 +788,7 @@ export function lockValue(plan, layout, lk) {
 }
 
 export function findLock(plan, spec) {
-  return (plan.locks || []).find((l) => l.kind === spec.kind && (spec.kind === 'gap'
+  return (plan.locks || []).find((l) => l.kind === spec.kind && (spec.kind === 'measure' ? l.measure === spec.measure : spec.kind === 'gap'
     ? (l.wa === spec.wa && l.wb === spec.wb) || (l.wa === spec.wb && l.wb === spec.wa)
     : l.wall === spec.wall && l.side === spec.side && l.ref === spec.ref)) || null;
 }
@@ -795,6 +800,11 @@ export function upsertLock(plan, spec) {
   const n = { id: uid('k'), ...spec };
   plan.locks.push(n);
   return n;
+}
+
+export function removeMeasure(plan, id) {
+  plan.measures = (plan.measures || []).filter((m) => m.id !== id);
+  plan.locks = (plan.locks || []).filter((l) => !(l.kind === 'measure' && l.measure === id));
 }
 
 export function removeLock(plan, id) {

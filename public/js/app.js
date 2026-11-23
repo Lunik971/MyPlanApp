@@ -458,7 +458,7 @@ function refreshPanel(force = false) {
   const sel = editor?.sel;
   const o = editor?.selected;
   if (!sel || !o || editor.tool === 'wall') { panel.hidden = true; panel.innerHTML = ''; panelKey = ''; panelSync = []; return; }
-  const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '')
+  const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '') + (sel.type === 'measure' ? ':' + (editor.plan.locks || []).some((l) => l.measure === sel.id) : '')
     + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) + ':' + (editor.measure()?.locked ? 1 : 0) + (editor.measure()?.chainLocked ? 1 : 0) : '');
   if (force || key !== panelKey) {
     panelKey = key; panelSync = [];
@@ -583,10 +583,14 @@ function openingPanel() {
 }
 
 function measurePanel() {
+  const isLk = () => (editor.plan.locks || []).some((l) => l.kind === 'measure' && l.measure === editor.sel?.id);
   const len = () => { const d = G.measureDim(editor.plan, editor.selected, 1); return d ? d.len : 0; };
   return h('div', {},
     panelHead('Mesure', h('span', { class: 'muted' }, textBind(() => G.fmtLen(len())))),
-    h('p', { class: 'note' }, 'Mesure conservée : elle suit les murs. Pour la modifier, utilisez l’outil Mesure ; 🗑 la supprime.'));
+    h('div', { class: 'row' }, field('Cote', len, (v) => editor.applySelectedMeasure(v, measPrefs.move), { min: 1 })),
+    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
+    h('div', { class: 'row' }, h('button', { class: 'chip' + (isLk() ? ' on' : ''), onclick: () => { editor.toggleSelectedMeasureLock(); refreshPanel(true); } }, isLk() ? '🔒 Verrouillée' : '🔓 Verrouiller')),
+    h('p', { class: 'note' }, 'Mesure conservée et verrouillée : elle suit les murs, et une modification qui la ferait changer est refusée. Tapez une nouvelle cote pour la corriger (le verrou est mis à jour) ; 🗑 la supprime.'));
 }
 
 function furniturePanel() {

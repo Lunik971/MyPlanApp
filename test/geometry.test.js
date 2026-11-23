@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -358,4 +358,19 @@ test('mesure conservée : suit les murs et se place hors du plan', () => {
   const d = measureDim(p, m, 1);
   assert.ok(Math.abs(d.len - 500) < 0.5, `longueur suivie ${d.len}`);
   assert.ok(Math.abs(d.A2.y) > 300 || d.A2.y < -10 || d.A2.y > 310, 'ligne de cote hors du plan');
+});
+
+test('mesure posée = verrouillée ; la supprimer retire son verrou', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const wa = p.walls.find((w) => p.nodes[w.a].x === 0 && p.nodes[w.b].x === 0).id;
+  const wb = p.walls.find((w) => p.nodes[w.a].x === 600 && p.nodes[w.b].x === 600).id;
+  const m = addMeasure(p, { x: 10, y: 150, walls: [wa] }, { x: 590, y: 150, walls: [wb] });
+  upsertLock(p, { kind: 'measure', measure: m.id, len: 580 });
+  const prev = normalizePlan(JSON.parse(JSON.stringify(p)));
+  const top = p.walls.find((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  setWallLength(p, top.id, 700, { fixed: p.nodes[top.a].x === 0 ? 'a' : 'b' });
+  assert.ok(brokenLocks(prev, p), 'élargir la pièce casse la mesure verrouillée');
+  removeMeasure(p, m.id);
+  assert.equal(p.locks.length, 0);
 });

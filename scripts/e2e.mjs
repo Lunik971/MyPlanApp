@@ -128,9 +128,17 @@ try {
   ok(Math.abs(mv - (bb.y1 - bb.y0 - 10)) < 1, `mesure intérieure entre les deux murs (${mv} cm)`);
   await page.fill('#measbar input', String(mv - 50));
   await page.press('#measbar input', 'Enter');
-  const bb2 = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return { h: Math.max(...ns.map((n) => n.y)) - Math.min(...ns.map((n) => n.y)), locks: window.__app.editor.plan.locks.filter((l) => l.kind === 'gap').length }; });
+  const bb2 = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return { h: Math.max(...ns.map((n) => n.y)) - Math.min(...ns.map((n) => n.y)), locks: window.__app.editor.plan.locks.filter((l) => l.kind === 'measure').length }; });
   ok(Math.abs(bb2.h - (bb.y1 - bb.y0 - 50)) < 1, `la cote saisie décale le mur du fond (${bb2.h})`);
   ok(bb2.locks === 1, 'la mesure saisie est verrouillée');
+  const edited = await ev(() => {
+    const e = window.__app.editor; e.setTool('select');
+    const m = e.plan.measures.at(-1); e.select({ type: 'measure', id: m.id });
+    const d0 = window.__app.G.measureDim(e.plan, m, 1).len;
+    const r = e.applySelectedMeasure(d0 - 20, 'b');
+    return { r, d0, d1: window.__app.G.measureDim(e.plan, m, 1).len };
+  });
+  ok(edited.r && Math.abs(edited.d1 - (edited.d0 - 20)) < 0.5, `mesure conservée modifiable (${edited.d0} → ${edited.d1})`);
   const refused = await ev(() => {
     const e = window.__app.editor; e.setTool('select');
     const mx = Math.min(...Object.values(e.plan.nodes).map((n) => n.x));
