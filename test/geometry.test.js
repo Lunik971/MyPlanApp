@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -163,4 +163,129 @@ test('formats & mobilier', () => {
   const f = { x: 0, y: 0, w: 100, d: 50, rot: 90, shape: 'rect' };
   assert.ok(pointInFurniture({ x: 0, y: 40 }, f)); // pivoté de 90° : 50 de large en x, 100 en y
   assert.ok(!pointInFurniture({ x: 40, y: 0 }, f));
+});
+
+// ── mur entier (segments coupés par des cloisons) ──
+function triplex() {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 10);
+  insertWall(p, 200, 0, 200, 300, 10);
+  insertWall(p, 400, 0, 400, 300, 10);
+  const top = p.walls.filter((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  return { p, top };
+}
+const topLens = (p) => p.walls.filter((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0)
+  .map((w) => ({ x: Math.min(p.nodes[w.a].x, p.nodes[w.b].x), l: Math.abs(p.nodes[w.a].x - p.nodes[w.b].x) }))
+  .sort((a, b) => a.x - b.x).map((q) => Math.round(q.l));
+
+test('wallChain retrouve les 3 segments du mur du haut, ordonnés', () => {
+  const { p, top } = triplex();
+  assert.equal(top.length, 3);
+  for (const w of top) {
+    const ch = wallChain(p, w.id);
+    assert.equal(ch.segments.length, 3);
+    assert.equal(Math.round(ch.total), 600);
+    assert.deepEqual(ch.segments.map((q) => Math.round(q.len)), [200, 200, 200]);
+    assert.equal(ch.segments[ch.index].id, w.id);
+  }
+  // un mur vertical n'est pas relié au mur du haut (angle droit)
+  const side = p.walls.find((w) => p.nodes[w.a].x === 0 && p.nodes[w.b].x === 0);
+  assert.equal(wallChain(p, side.id).segments.length, 1);
+});
+
+test('longueur totale : le segment touché absorbe la différence', () => {
+  const { p, top } = triplex();
+  const mid = top.find((w) => Math.min(p.nodes[w.a].x, p.nodes[w.b].x) === 200);
+  assert.ok(setChainLength(p, mid.id, 700, { fixed: 'first', distribute: 'selected' }));
+  assert.deepEqual(topLens(p), [200, 300, 200]);
+  const xs = Object.values(p.nodes).map((n) => n.x);
+  assert.equal(Math.max(...xs), 700);
+  assert.equal(computeRooms(p).length, 3);
+});
+
+test('longueur totale : répartition proportionnelle', () => {
+  const { p, top } = triplex();
+  assert.ok(setChainLength(p, top[0].id, 900, { fixed: 'first', distribute: 'prop' }));
+  assert.deepEqual(topLens(p), [300, 300, 300]);
+  const areas = computeRooms(p).map((r) => Math.round(r.axisArea));
+  assert.deepEqual(areas, [90000, 90000, 90000]);
+});
+
+test('longueur totale : dernier segment, côté fixe à droite', () => {
+  const { p, top } = triplex();
+  assert.ok(setChainLength(p, top[0].id, 500, { fixed: 'second', distribute: 'last' }));
+  assert.deepEqual(topLens(p), [100, 200, 200]);
+  const xs = Object.values(p.nodes).map((n) => n.x);
+  assert.equal(Math.max(...xs), 600); // le côté droit n'a pas bougé
+  assert.equal(Math.min(...xs), 100);
+});
+
+test('chaque segment reste modifiable séparément', () => {
+  const { p, top } = triplex();
+  const first = top.find((w) => Math.min(p.nodes[w.a].x, p.nodes[w.b].x) === 0);
+  setWallLength(p, first.id, 250, { fixed: p.nodes[first.a].x === 0 ? 'a' : 'b' });
+  assert.deepEqual(topLens(p), [250, 200, 200]);
+  assert.equal(Math.round(wallChain(p, first.id).total), 650);
+});
+
+// ── cotes intérieures / extérieures ──
+test('longueurs de face : intérieur = axe − e, extérieur = axe + e (angles droits)', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const lay = computeLayout(p);
+  const top = p.walls.find((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  const inner = resolveSide(p, lay, top.id, 1, 'inner');
+  const outer = resolveSide(p, lay, top.id, 1, 'outer');
+  assert.equal(Math.round(inner.entry.len), 580);
+  assert.equal(Math.round(outer.entry.len), 620);
+  assert.equal(inner.entry.kind, 'room');
+  assert.equal(outer.entry.kind, 'outer');
+  assert.notEqual(inner.side, outer.side);
+});
+
+test('cotes par pièce : chaque segment a sa longueur intérieure, et le mur entier sa longueur hors-tout', () => {
+  const { p, top } = triplex();
+  const lay = computeLayout(p);
+  const seg = top.find((w) => Math.min(p.nodes[w.a].x, p.nodes[w.b].x) === 200);
+  const innerLens = dimLabels(p, lay, 'inner').filter((l) => top.some((t) => t.id === l.wall)).map((l) => Math.round(l.len)).sort((a, b) => a - b);
+  assert.deepEqual(innerLens, [190, 190, 190]);
+  const outer = resolveSide(p, lay, seg.id, 1, 'outer');
+  const mOut = chainMeasure(p, lay, seg.id, outer.side);
+  assert.deepEqual(mOut.lens.map(Math.round), [205, 200, 205]);
+  assert.equal(Math.round(mOut.total), 610);
+  const inn = resolveSide(p, lay, seg.id, 1, 'inner');
+  const mIn = chainMeasure(p, lay, seg.id, inn.side);
+  assert.equal(Math.round(mIn.total), 590); // de l'angle intérieur à l'angle intérieur
+});
+
+test('corriger une cote intérieure règle bien la longueur de la face', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const top = p.walls.find((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  const side = resolveSide(p, computeLayout(p), top.id, 1, 'inner').side;
+  const fixed = p.nodes[top.a].x === 0 ? 'a' : 'b';
+  assert.ok(setWallFaceLength(p, top.id, side, 400, { fixed }));
+  const e = sideEntry(p, computeLayout(p), top.id, side);
+  assert.ok(Math.abs(e.len - 400) < 0.1, `face ${e.len}`);
+  const room = computeLayout(p).rooms[0];
+  assert.ok(Math.abs(room.area - 400 * 280) < 5, `aire ${room.area}`);
+});
+
+test('mur entier : cote extérieure hors-tout de 7 m répartie sur le segment touché', () => {
+  const { p, top } = triplex();
+  const lay = computeLayout(p);
+  const mid = top.find((w) => Math.min(p.nodes[w.a].x, p.nodes[w.b].x) === 200);
+  const side = resolveSide(p, lay, mid.id, 1, 'outer').side;
+  const fixed = 'first';
+  assert.ok(setChainFaceLength(p, mid.id, side, 700, { fixed, distribute: 'selected' }));
+  const m = chainMeasure(p, computeLayout(p), mid.id, side);
+  assert.ok(Math.abs(m.total - 700) < 0.1, `total ${m.total}`);
+  assert.deepEqual(m.lens.map(Math.round), [205, 290, 205]);
+});
+
+test('mode axe : une seule étiquette par mur, au milieu', () => {
+  const { p } = triplex();
+  const labels = dimLabels(p, computeLayout(p), 'axis');
+  assert.equal(labels.length, p.walls.length);
+  assert.ok(labels.every((l) => l.side === 0));
 });

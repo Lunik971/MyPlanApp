@@ -213,7 +213,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && dir
 
 // ───────────────────────── éditeur ─────────────────────────
 
-const prefs = { wallFix: 'first', wallMode: 'stretch' };
+const prefs = { wallFix: 'first', wallMode: 'stretch', chainDist: 'selected' };
 let panelKey = '', panelSync = [];
 
 function ensureEditor() {
@@ -420,7 +420,8 @@ function refreshPanel(force = false) {
   const sel = editor?.sel;
   const o = editor?.selected;
   if (!sel || !o || editor.tool === 'wall') { panel.hidden = true; panel.innerHTML = ''; panelKey = ''; panelSync = []; return; }
-  const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '');
+  const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '')
+    + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) : '');
   if (force || key !== panelKey) {
     panelKey = key; panelSync = [];
     panel.innerHTML = '';
@@ -468,9 +469,16 @@ function sideLabels(w) {
   return { horiz, firstIsA };
 }
 
+const REFS = [['inner', 'Intérieur'], ['outer', 'Extérieur'], ['axis', 'Axe']];
+function setDimRef(v) {
+  editor.setSetting('dimRef', v);
+  markDirty();
+  refreshPanel(true);
+}
+
 function wallPanel() {
   const cur = () => editor.selected;
-  const len = () => G.wallInfo(editor.plan, cur()).len;
+  const m = () => editor.measure();
   const labels = () => (sideLabels(cur()).horiz ? ['Côté gauche', 'Côté droit'] : ['Côté haut', 'Côté bas']);
   const apply = (v) => {
     const w = cur(); const { firstIsA } = sideLabels(w);
@@ -478,6 +486,7 @@ function wallPanel() {
     const fixed = keepFirst === firstIsA ? 'a' : 'b';
     editor.applyWallLength(v, { fixed, mode: prefs.wallMode });
   };
+  const applyChain = (v) => editor.applyChainLength(v, { fixed: prefs.wallFix, distribute: prefs.chainDist, mode: prefs.wallMode });
   const fixSeg = h('span');
   const renderFix = () => { fixSeg.innerHTML = ''; const [l1, l2] = labels(); fixSeg.append(seg([['first', l1], ['second', l2]], () => prefs.wallFix, (v) => { prefs.wallFix = v; })); };
   renderFix();
@@ -485,12 +494,27 @@ function wallPanel() {
   const thick = h('div', { class: 'chips' });
   const renderThick = () => { thick.innerHTML = ''; for (const t of [7, 10, 15, 20, 30]) thick.append(h('button', { class: 'chip' + (cur().t === t ? ' on' : ''), onclick: () => editor.setWallThickness(t) }, String(t))); };
   renderThick(); panelSync.push(renderThick);
+  const multi = (m()?.count || 1) > 1;
+  const refSeg = seg(REFS, () => editor.dimRef, setDimRef);
+  const face = textBind(() => { const q = m(); return q ? (q.mode === 'axis' ? 'à l’axe' : q.entry ? `côté ${q.faceName}` : 'à l’axe') : ''; });
+  const switchBtn = m()?.canSwitch
+    ? h('button', { class: 'chip', title: 'Mesurer l’autre côté du mur', onclick: () => { editor.switchSide(); refreshPanel(true); } }, '⇄ Autre côté') : null;
+  const distSeg = multi ? h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Mur entier :'),
+    seg([['selected', 'Ce segment'], ['last', 'Au bout'], ['prop', 'Réparti']], () => prefs.chainDist, (v) => { prefs.chainDist = v; })) : null;
+  const segList = multi ? h('p', { class: 'note' }, textBind(() => {
+    const q = m(); return q ? 'Segments : ' + q.segs.map((x, i) => (i === q.index ? '[' + G.fmtCm(x) + ']' : G.fmtCm(x))).join(' + ') + ' cm' : '';
+  })) : null;
   return h('div', {},
-    panelHead('Mur', h('span', { class: 'muted' }, textBind(() => G.fmtLen(len())))),
-    h('div', { class: 'row' }, field('Longueur', len, apply, { min: 5 })),
+    panelHead('Mur', h('span', { class: 'muted' }, textBind(() => (m() ? G.fmtLen(m().len) : ''))), true),
+    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Cotes :'), refSeg, switchBtn),
+    h('div', { class: 'row fields' },
+      field(multi ? 'Ce segment' : 'Longueur', () => m().len, apply, { min: 5 }),
+      multi ? field('Mur entier', () => m().total, applyChain, { min: 5 }) : null),
+    h('p', { class: 'note' }, textBind(() => `Mesure ${face.nodeValue}.`)),
+    distSeg, segList,
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Garder fixe :'), fixSeg),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Correction :'), seg([['stretch', 'Étirer la pièce'], ['point', 'Ce point seul']], () => prefs.wallMode, (v) => { prefs.wallMode = v; })),
-    h('p', { class: 'note' }, 'Étirer garde les angles droits (ce qui est au-delà suit). Cote à l’axe du mur ; surfaces calculées à l’intérieur.'),
+    h('p', { class: 'note' }, 'Étirer garde les angles droits (ce qui est au-delà suit). Surfaces calculées à l’intérieur.'),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Épaisseur (cm) :'), thick),
   );
 }
@@ -641,6 +665,7 @@ function settingsSheet() {
   openSheet('Réglages du plan', h('div', {},
     h('p', { class: 'cat-title' }, 'Pas d’accrochage des points'), grid,
     h('p', { class: 'cat-title' }, 'Cotes sur les murs'), dims,
+    h('p', { class: 'cat-title' }, 'Cotes prises à…'), seg(REFS, () => editor.dimRef, (v) => { editor.setSetting('dimRef', v); markDirty(); }),
     h('p', { class: 'note' }, 'L’épaisseur des nouveaux murs se règle dans l’outil « Mur ».')));
 }
 

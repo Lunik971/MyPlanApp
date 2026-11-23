@@ -26,7 +26,7 @@ export function emptyPlan() {
     openings: [],
     rooms: [],
     furniture: [],
-    settings: { wallT: 10, grid: 10, dims: true },
+    settings: { wallT: 10, grid: 10, dims: true, dimRef: 'inner' },
   };
 }
 
@@ -312,6 +312,87 @@ export function setWallLength(plan, wallId, newLen, { fixed = 'a', mode = 'stret
   return true;
 }
 
+// ───────────────────────── mur « entier » ─────────────────────────
+
+// Un mur coupé par des cloisons en T apparaît en plusieurs segments (un par pièce mesurée).
+// wallChain retrouve la suite de segments alignés, ordonnée de gauche à droite (ou de haut en bas).
+export function wallChain(plan, wallId) {
+  const start = plan.walls.find((w) => w.id === wallId);
+  if (!start) return null;
+  const N = plan.nodes;
+  const dirTo = (w, from) => {
+    const to = w.a === from ? w.b : w.a;
+    const l = dist(N[from], N[to]) || 1e-9;
+    return { x: (N[to].x - N[from].x) / l, y: (N[to].y - N[from].y) / l, to };
+  };
+  const extend = (fromNode, d0, used) => {
+    const out = [];
+    let cur = fromNode, d = d0;
+    for (;;) {
+      let next = null;
+      for (const w of plan.walls) {
+        if (used.has(w.id) || (w.a !== cur && w.b !== cur)) continue;
+        const dd = dirTo(w, cur);
+        if (Math.abs(d.x * dd.y - d.y * dd.x) < 0.01 && d.x * dd.x + d.y * dd.y > 0) { next = { w, dd }; break; }
+      }
+      if (!next) break;
+      used.add(next.w.id);
+      out.push({ wall: next.w, from: cur, to: next.dd.to });
+      cur = next.dd.to; d = next.dd;
+    }
+    return out;
+  };
+  const d0 = dirTo(start, start.a);
+  const used = new Set([start.id]);
+  const fwd = extend(start.b, d0, used);
+  const bwd = extend(start.a, { x: -d0.x, y: -d0.y }, used);
+  let segs = [
+    ...bwd.reverse().map((q) => ({ wall: q.wall, from: q.to, to: q.from })),
+    { wall: start, from: start.a, to: start.b },
+    ...fwd,
+  ];
+  const first = N[segs[0].from], last = N[segs.at(-1).to];
+  const horiz = Math.abs(last.x - first.x) >= Math.abs(last.y - first.y);
+  if (horiz ? first.x > last.x : first.y > last.y) segs = segs.reverse().map((q) => ({ wall: q.wall, from: q.to, to: q.from }));
+  const segments = segs.map((q) => ({ id: q.wall.id, from: q.from, to: q.to, len: dist(N[q.from], N[q.to]) }));
+  return {
+    segments,
+    horiz,
+    index: segments.findIndex((q) => q.id === wallId),
+    total: segments.reduce((a, q) => a + q.len, 0),
+  };
+}
+
+// Donne une longueur totale à un mur composé de plusieurs segments.
+//   fixed      : 'first' (gauche/haut) ou 'second' (droite/bas) — côté qui ne bouge pas
+//   distribute : 'selected' le segment touché absorbe la différence (les autres cotes ne changent pas)
+//                'last'     le segment du bout opposé au côté fixe l'absorbe
+//                'prop'     la différence est répartie proportionnellement sur tous les segments
+//   mode       : 'stretch' (défaut) ou 'point', comme setWallLength (ignoré en 'prop')
+export function setChainLength(plan, wallId, newTotal, { fixed = 'first', distribute = 'selected', mode = 'stretch' } = {}) {
+  const ch = wallChain(plan, wallId);
+  if (!ch || !(newTotal >= 1)) return false;
+  const apply = (seg, newLen, m) => {
+    const w = plan.walls.find((q) => q.id === seg.id);
+    const fixedNode = fixed === 'first' ? seg.from : seg.to;
+    return setWallLength(plan, seg.id, newLen, { fixed: w.a === fixedNode ? 'a' : 'b', mode: m });
+  };
+  const segs = ch.segments;
+  if (segs.length === 1) return apply(segs[0], newTotal, mode);
+  const delta = newTotal - ch.total;
+  if (distribute === 'prop') {
+    const f = newTotal / ch.total;
+    const order = fixed === 'first' ? segs : [...segs].reverse();
+    const lens = new Map(segs.map((q) => [q.id, q.len]));
+    for (const seg of order) apply(seg, lens.get(seg.id) * f, 'stretch');
+    return true;
+  }
+  const seg = distribute === 'last' ? (fixed === 'first' ? segs.at(-1) : segs[0]) : segs[ch.index];
+  const newLen = seg.len + delta;
+  if (newLen < 1) return false;
+  return apply(seg, newLen, mode);
+}
+
 // ───────────────────────── ouvertures ─────────────────────────
 
 export const OPENING_KINDS = {
@@ -390,7 +471,7 @@ export function labelPoint(poly) {
   return { x: round1(best.x), y: round1(best.y) };
 }
 
-export function computeRooms(plan) {
+export function computeLayout(plan) {
   const nodes = plan.nodes;
   const adj = {};
   for (const w of plan.walls) {
@@ -436,19 +517,31 @@ export function computeRooms(plan) {
       }
       if (edges.length < 3) continue;
       const pts = edges.map((ed) => nodes[ed.from]);
-      if (polyArea(pts) < 100) continue; // < 0,01 m² ou face extérieure (négative)
-      faces.push({ edges, pts });
+      const A = polyArea(pts);
+      if (Math.abs(A) < 100) continue; // < 0,01 m²
+      faces.push({ edges, pts, outer: A < 0 }); // A < 0 : face extérieure (contour du bâtiment)
     }
   }
 
+  const sideMap = new Map();
   for (const f of faces) {
     const thick = f.edges.map((ed) => ed.wall.t);
     let inner = insetPolygon(f.pts, thick);
     const ia = polyArea(inner), aa = polyArea(f.pts);
-    if (!(ia > 0 && ia <= aa + 1)) inner = f.pts.map((p) => ({ x: p.x, y: p.y }));
-    const area = polyArea(inner);
+    const valid = f.outer ? ia < 0 && ia <= aa + 1 : ia > 0 && ia <= aa + 1;
+    if (!valid) inner = f.pts.map((p) => ({ x: p.x, y: p.y }));
     const sides = inner.map((p, i) => ({ len: dist(p, inner[(i + 1) % inner.length]), wall: f.edges[i].wall.id }));
     const key = [...new Set(f.edges.map((e) => e.from))].sort().join('-');
+    // longueur de chaque face de mur (utile pour les cotes intérieures / extérieures)
+    inner.forEach((p, i) => {
+      const ed = f.edges[i];
+      sideMap.set(ed.from + '>' + ed.wall.id, {
+        wall: ed.wall.id, from: ed.from, len: sides[i].len, p0: p, p1: inner[(i + 1) % inner.length],
+        kind: f.outer ? 'outer' : 'room', room: f.outer ? null : key,
+      });
+    });
+    if (f.outer) continue;
+    const area = polyArea(inner);
     let label = null;
     for (const l of plan.rooms) {
       if (usedLabels.has(l.id)) continue;
@@ -459,7 +552,7 @@ export function computeRooms(plan) {
       axis: f.pts.map((p) => ({ x: p.x, y: p.y })),
       inner,
       area,
-      axisArea: aa,
+      axisArea: polyArea(f.pts),
       perimeter: sides.reduce((s, q) => s + q.len, 0),
       sides,
       center: labelPoint(inner),
@@ -469,7 +562,114 @@ export function computeRooms(plan) {
     });
   }
   rooms.sort((p, q) => p.center.y - q.center.y || p.center.x - q.center.x);
-  return rooms;
+  return { rooms, sides: sideMap };
+}
+
+export function computeRooms(plan) {
+  return computeLayout(plan).rooms;
+}
+
+// ───────────────────────── cotes : intérieur / extérieur / axe ─────────────────────────
+// side : +1 = côté gauche du mur (de a vers b), -1 = côté droit, 0 = à l'axe.
+// mode : 'inner' (nu intérieur des pièces), 'outer' (nu extérieur du bâtiment), 'axis'.
+
+export function sideEntry(plan, layout, wallId, side) {
+  const w = plan.walls.find((q) => q.id === wallId);
+  if (!w || !side) return null;
+  return layout.sides.get((side === 1 ? w.a : w.b) + '>' + wallId) || null;
+}
+
+// Quelle face mesurer pour ce mur : celle demandée si elle convient au mode, sinon l'autre.
+export function resolveSide(plan, layout, wallId, pref, mode) {
+  if (mode === 'axis') return { side: 0, entry: null };
+  const want = mode === 'inner' ? 'room' : 'outer';
+  const ents = (pref === -1 ? [-1, 1] : [1, -1])
+    .map((sd) => ({ side: sd, entry: sideEntry(plan, layout, wallId, sd) })).filter((x) => x.entry);
+  const match = ents.find((x) => x.entry.kind === want);
+  if (match) return match;
+  const room = ents.find((x) => x.entry.kind === 'room');
+  if (mode === 'outer' && room) return room; // cloison : pas de face extérieure → mesure intérieure
+  return { side: 0, entry: null };
+}
+
+// Étiquettes de cotes à afficher (et à toucher). offCm : décalage vers l'intérieur de la face.
+export function dimLabels(plan, layout, mode, offCm = 10) {
+  const out = [];
+  for (const w of plan.walls) {
+    const a = plan.nodes[w.a], b = plan.nodes[w.b];
+    if (!a || !b) continue;
+    let used = false;
+    if (mode !== 'axis') {
+      const ents = [1, -1].map((sd) => ({ side: sd, e: sideEntry(plan, layout, w.id, sd) })).filter((x) => x.e);
+      let chosen = ents.filter((x) => x.e.kind === 'room');
+      if (mode === 'outer') {
+        const outer = ents.filter((x) => x.e.kind === 'outer');
+        if (outer.length) chosen = outer;
+      }
+      for (const { side, e } of chosen) {
+        const dx = e.p1.x - e.p0.x, dy = e.p1.y - e.p0.y, l = Math.hypot(dx, dy) || 1;
+        out.push({
+          wall: w.id, side, len: e.len, kind: e.kind,
+          x: (e.p0.x + e.p1.x) / 2 - (dy / l) * offCm, y: (e.p0.y + e.p1.y) / 2 + (dx / l) * offCm,
+        });
+        used = true;
+      }
+    }
+    if (!used) out.push({ wall: w.id, side: 0, len: dist(a, b), kind: 'axis', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  }
+  return out;
+}
+
+const chainSideOfWall = (seg, wall, sideW) => (wall.a === seg.from ? 1 : -1) * sideW;
+const wallSideOfChain = (seg, wall, sideC) => (wall.a === seg.from ? 1 : -1) * sideC;
+
+// Longueurs affichées des segments d'un mur entier et longueur totale, pour une face donnée.
+export function chainMeasure(plan, layout, wallId, sideW) {
+  const ch = wallChain(plan, wallId);
+  if (!ch) return null;
+  const wall = (id) => plan.walls.find((q) => q.id === id);
+  if (!sideW) return { ch, lens: ch.segments.map((q) => q.len), total: ch.total, sideC: 0 };
+  const sel = ch.segments[ch.index];
+  const sideC = chainSideOfWall(sel, wall(sel.id), sideW);
+  const ents = ch.segments.map((seg) => sideEntry(plan, layout, seg.id, wallSideOfChain(seg, wall(seg.id), sideC)));
+  const lens = ch.segments.map((seg, i) => (ents[i] ? ents[i].len : seg.len));
+  let total = ch.total;
+  const e0 = ents[0], e1 = ents.at(-1);
+  if (e0 && e1) {
+    const f = ch.segments[0], l = ch.segments.at(-1);
+    const start = e0.from === f.from ? e0.p0 : e0.p1;
+    const end = e1.from === l.from ? e1.p1 : e1.p0;
+    const A = plan.nodes[f.from], B = plan.nodes[l.to];
+    const L = dist(A, B) || 1;
+    total = ((end.x - start.x) * (B.x - A.x) + (end.y - start.y) * (B.y - A.y)) / L;
+  }
+  return { ch, lens, total, sideC };
+}
+
+// Règle la longueur d'une face de mur (intérieure / extérieure) en agissant sur l'axe, par itérations.
+export function setWallFaceLength(plan, wallId, side, target, opts = {}) {
+  for (let i = 0; i < 5; i++) {
+    const e = sideEntry(plan, computeLayout(plan), wallId, side);
+    const w = plan.walls.find((q) => q.id === wallId);
+    if (!w) return false;
+    const axis = wallInfo(plan, w).len;
+    const diff = target - (e ? e.len : axis);
+    if (Math.abs(diff) < 0.05) return true;
+    if (!setWallLength(plan, wallId, axis + diff, opts)) return false;
+  }
+  return true;
+}
+
+// Idem pour la longueur totale d'un mur entier (suite de segments alignés).
+export function setChainFaceLength(plan, wallId, side, target, opts = {}) {
+  for (let i = 0; i < 5; i++) {
+    const m = chainMeasure(plan, computeLayout(plan), wallId, side);
+    if (!m) return false;
+    const diff = target - m.total;
+    if (Math.abs(diff) < 0.05) return true;
+    if (!setChainLength(plan, wallId, m.ch.total + diff, opts)) return false;
+  }
+  return true;
 }
 
 export function setRoomMeta(plan, room, { name, color }) {

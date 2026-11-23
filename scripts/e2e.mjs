@@ -79,7 +79,7 @@ try {
   await page.click('#draftbar [aria-label="Vers right"]');
   // la cloison à x=250 coupe le nouveau mur en deux : on additionne les morceaux situés à y=100
   const w = await ev(() => { const p = window.__app.editor.plan; return Math.round(p.walls.filter((q) => p.nodes[q.a].y === 100 && p.nodes[q.b].y === 100).reduce((s, q) => s + Math.hypot(p.nodes[q.a].x - p.nodes[q.b].x, p.nodes[q.a].y - p.nodes[q.b].y), 0)); });
-  ok(w === 250, `mur de 2,5 m créé par saisie, découpé par la cloison (${w} cm)`);
+  ok(w === 260, `mur de 2,5 m (cote intérieure, axe 2,6 m) créé par saisie, découpé par la cloison (${w} cm)`);
   await page.click('#draftbar .btn.primary');
   await ev(() => window.__app.editor.undo()); // retire ce mur de test
   await ev(() => window.__app.editor.setTool('select'));
@@ -109,8 +109,8 @@ try {
   await page.waitForSelector('#panel:not([hidden])');
   ok((await page.textContent('#panel')).startsWith('Mur'), 'toucher un mur ouvre son panneau');
   const before = await ev(() => window.__app.editor.rooms.map((r) => Math.round(r.axisArea)).sort((a, b) => a - b));
-  await page.fill('#panel label:has-text("Longueur") input', '300');
-  await page.press('#panel label:has-text("Longueur") input', 'Enter');
+  await page.fill('#panel label:has-text("Ce segment") input', '300');
+  await page.press('#panel label:has-text("Ce segment") input', 'Enter');
   const after = await ev(() => window.__app.editor.rooms.map((r) => Math.round(r.axisArea)).sort((a, b) => a - b));
   ok(JSON.stringify(before) !== JSON.stringify(after), `les surfaces suivent la correction (${before} → ${after})`);
   await page.screenshot({ path: `${shots}/2-mur.png` });

@@ -1,5 +1,5 @@
 // Rendu 2D du plan sur un canvas. Aucune mutation du plan ici.
-import { openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo } from './geometry.js';
+import { openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo, dimLabels, resolveSide, wallChain } from './geometry.js';
 
 export const ROOM_COLORS = ['#e8f0fb', '#e4f4e8', '#fdf0dc', '#fbe6ec', '#ece6fa', '#dff3f5', '#f5f0d2', '#eceff1'];
 const DEFAULT_ROOM = '#f6f8fb';
@@ -228,6 +228,16 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
   // sélection : mur
   if (sel?.type === 'wall') {
     const w = plan.walls.find((q) => q.id === sel.id);
+    const ch = w && wallChain(plan, w.id);
+    if (ch && ch.segments.length > 1) {
+      ctx.lineCap = 'butt';
+      for (const sg of ch.segments) {
+        if (sg.id === sel.id) continue;
+        const ww = plan.walls.find((q) => q.id === sg.id), a = plan.nodes[sg.from], b = plan.nodes[sg.to];
+        ctx.lineWidth = Math.max(ww.t * S, 2.2) + 5; ctx.strokeStyle = 'rgba(37,99,235,.13)';
+        ctx.beginPath(); ctx.moveTo(X(a.x), Y(a.y)); ctx.lineTo(X(b.x), Y(b.y)); ctx.stroke();
+      }
+    }
     if (w) {
       const a = plan.nodes[w.a], b = plan.nodes[w.b];
       ctx.lineCap = 'butt'; ctx.lineWidth = Math.max(w.t * S, 2.2) + 7; ctx.strokeStyle = 'rgba(37,99,235,.28)';
@@ -269,15 +279,18 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
     }
   }
 
-  // cotes
+  // cotes (intérieures, extérieures ou à l'axe selon le réglage du plan)
   if (o.dims) {
-    for (const w of plan.walls) {
-      const wi = wallInfo(plan, w);
-      if (wi.len * S < 38) continue;
-      const hot = sel?.type === 'wall' && sel.id === w.id;
-      const mx = X((wi.a.x + wi.b.x) / 2), my = Y((wi.a.y + wi.b.y) / 2);
-      if (hot) pill(ctx, fmtLen(wi.len), mx, my, { fg: '#fff', bg: BLUE, border: BLUE });
-      else haloText(ctx, fmtLen(wi.len), mx, my);
+    const mode = o.dimRef || 'axis';
+    const lay = o.layout;
+    const labels = lay ? dimLabels(plan, lay, mode, 11 / S) : dimLabels(plan, { sides: new Map() }, 'axis');
+    const selSide = sel?.type === 'wall' && lay ? resolveSide(plan, lay, sel.id, sel.side || 1, mode).side : 0;
+    for (const l of labels) {
+      if (l.len * S < 38) continue;
+      const hot = sel?.type === 'wall' && sel.id === l.wall && l.side === selSide;
+      const txt = fmtLen(l.len);
+      if (hot) pill(ctx, txt, X(l.x), Y(l.y), { fg: '#fff', bg: BLUE, border: BLUE });
+      else haloText(ctx, txt, X(l.x), Y(l.y));
     }
   }
   if (sel?.type === 'opening') {
@@ -337,7 +350,9 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
       const len = Math.hypot(pv.x - d.last.x, pv.y - d.last.y);
       let ang = (Math.atan2(-(pv.y - d.last.y), pv.x - d.last.x) * 180) / Math.PI;
       if (ang < 0) ang += 360;
-      pill(ctx, `${fmtLen(len)} · ${Math.round(ang)}°`, (X(d.last.x) + X(pv.x)) / 2, (Y(d.last.y) + Y(pv.y)) / 2 - 18, { fg: '#fff', bg: BLUE, border: BLUE });
+      const shown = Math.max(0, len + (o.dimDelta || 0));
+      const tag = o.dimRef === 'inner' ? ' int.' : o.dimRef === 'outer' ? ' ext.' : '';
+      pill(ctx, `${fmtLen(shown)}${tag} · ${Math.round(ang)}°`, (X(d.last.x) + X(pv.x)) / 2, (Y(d.last.y) + Y(pv.y)) / 2 - 18, { fg: '#fff', bg: BLUE, border: BLUE });
     }
     if (d.last) {
       ctx.beginPath(); ctx.arc(X(d.last.x), Y(d.last.y), 6, 0, Math.PI * 2); ctx.fillStyle = BLUE; ctx.fill();

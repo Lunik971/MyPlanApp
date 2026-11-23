@@ -18,6 +18,7 @@ export class Editor {
     this.hooks = hooks;
     this.plan = G.emptyPlan();
     this.rooms = [];
+    this.layout = { rooms: [], sides: new Map() };
     this.view = { s: 0.4, ox: 40, oy: 40 };
     this.tool = 'select';
     this.openingKind = 'door';
@@ -58,7 +59,7 @@ export class Editor {
 
   setPlan(plan, { fit = true } = {}) {
     this.plan = G.normalizePlan(plan);
-    this.rooms = G.computeRooms(this.plan);
+    this.relayout();
     this.undoStack = []; this.redoStack = [];
     this.sel = null; this.draft = null; this.ghost = null;
     this.hooks.select?.(null);
@@ -75,8 +76,13 @@ export class Editor {
     this.hooks.history?.();
   }
 
+  relayout() {
+    this.layout = G.computeLayout(this.plan);
+    this.rooms = this.layout.rooms;
+  }
+
   afterChange() {
-    this.rooms = G.computeRooms(this.plan);
+    this.relayout();
     this.checkSelection();
     this.hooks.change?.();
     this.draw();
@@ -292,6 +298,13 @@ export class Editor {
       const across = (p.x - g.c.x) * g.nx + (p.y - g.c.y) * g.ny;
       if (Math.abs(along) <= o.w / 2 + 6 / S && Math.abs(across) <= Math.max(g.t / 2, 10 / S)) return { type: 'opening', id: o.id };
     }
+    if (plan.settings.dims) {
+      const mode = plan.settings.dimRef || 'inner';
+      for (const l of G.dimLabels(plan, this.layout, mode, 11 / S)) {
+        const sp = this.toScreen(l), cp = this.toScreen(p);
+        if (l.len * S >= 38 && Math.abs(sp.x - cp.x) < 28 && Math.abs(sp.y - cp.y) < 12) return { type: 'label', wall: l.wall, side: l.side };
+      }
+    }
     let bn = null, bnd = 14 / S;
     for (const [id, n] of Object.entries(plan.nodes)) {
       const d = Math.hypot(n.x - p.x, n.y - p.y);
@@ -307,6 +320,50 @@ export class Editor {
     if (bw) return { type: 'wall', id: bw };
     for (const r of this.rooms) if (G.pointInPoly(p, r.inner)) return { type: 'room', id: r.id };
     return null;
+  }
+
+  // Côté (+1 gauche / -1 droite de a→b) où se trouve le point p par rapport au mur
+  tapSide(wallId, p) {
+    const w = this.plan.walls.find((q) => q.id === wallId);
+    if (!w) return 1;
+    const wi = G.wallInfo(this.plan, w);
+    return (p.x - wi.a.x) * wi.nx + (p.y - wi.a.y) * wi.ny >= 0 ? 1 : -1;
+  }
+
+  get dimRef() { return this.plan.settings.dimRef || 'inner'; }
+
+  // Écart entre la cote affichée et la longueur à l'axe, pour un mur dont les deux bouts sont d'équerre
+  dimDelta() {
+    const t = this.plan.settings.wallT || 10;
+    return this.dimRef === 'inner' ? -t : this.dimRef === 'outer' ? t : 0;
+  }
+
+  // Mesures du mur sélectionné selon la référence choisie (intérieur / extérieur / axe)
+  measure() {
+    const w = this.sel?.type === 'wall' ? this.selected : null;
+    if (!w) return null;
+    const mode = this.dimRef;
+    const wi = G.wallInfo(this.plan, w);
+    const r = G.resolveSide(this.plan, this.layout, w.id, this.sel.side || 1, mode);
+    const cm = G.chainMeasure(this.plan, this.layout, w.id, r.side);
+    const other = r.entry ? G.sideEntry(this.plan, this.layout, w.id, -r.side) : null;
+    let faceName = 'axe';
+    if (r.entry) {
+      if (r.entry.kind === 'outer') faceName = 'extérieur';
+      else faceName = this.rooms.find((q) => q.id === r.entry.room)?.name || 'pièce';
+    }
+    return {
+      mode, side: r.side, entry: r.entry, faceName,
+      len: r.entry ? r.entry.len : wi.len, axisLen: wi.len,
+      segs: cm.lens, total: cm.total, index: cm.ch.index, count: cm.ch.segments.length,
+      canSwitch: !!(r.entry && other && other.kind === r.entry.kind),
+    };
+  }
+
+  switchSide() {
+    const m = this.measure();
+    if (!m?.canSwitch) return;
+    this.select({ type: 'wall', id: this.sel.id, side: -m.side });
   }
 
   wallNearPoint(p) {
@@ -355,9 +412,10 @@ export class Editor {
         g.kind = 'dragFurniture'; g.orig = { x: f.x, y: f.y }; return;
       }
       if (h.type === 'opening') { this.select({ type: 'opening', id: h.id }); g.kind = 'dragOpening'; return; }
+      if (h.type === 'label') { g.kind = 'pan'; return; } // toucher un chiffre sélectionne ce mur et cette face
       if (h.type === 'node') { g.kind = 'dragNode'; g.node = h.id; g.orig = { ...this.plan.nodes[h.id] }; return; }
       if (h.type === 'wall') {
-        this.select({ type: 'wall', id: h.id });
+        this.select({ type: 'wall', id: h.id, side: this.tapSide(h.id, g.startPlan) });
         const w = this.plan.walls.find((q) => q.id === h.id);
         const wi = G.wallInfo(this.plan, w);
         g.kind = 'dragWall'; g.w = w; g.n = { x: wi.nx, y: wi.ny };
@@ -436,7 +494,7 @@ export class Editor {
         G.moveNode(plan, g.node, s.node ? s.x : s.x, s.node ? s.y : s.y);
         this.mergeMark = s.node ? { x: s.x, y: s.y } : null;
         g.mergeWith = s.node || null;
-        this.rooms = G.computeRooms(plan);
+        this.relayout();
         this.draw();
         this.hooks.live?.();
         break;
@@ -448,7 +506,7 @@ export class Editor {
         const d = Math.round(((p.x - g.startPlan.x) * g.n.x + (p.y - g.startPlan.y) * g.n.y) / st) * st;
         G.moveNode(plan, g.w.a, g.origA.x + g.n.x * d, g.origA.y + g.n.y * d);
         G.moveNode(plan, g.w.b, g.origB.x + g.n.x * d, g.origB.y + g.n.y * d);
-        this.rooms = G.computeRooms(plan);
+        this.relayout();
         this.draw();
         this.hooks.live?.();
         break;
@@ -476,7 +534,8 @@ export class Editor {
     switch (g.kind) {
       case 'pan':
         if (!g.moved) {
-          if (g.hit?.type === 'room') this.select({ type: 'room', id: g.hit.id });
+          if (g.hit?.type === 'label') this.select({ type: 'wall', id: g.hit.wall, side: g.hit.side });
+          else if (g.hit?.type === 'room') this.select({ type: 'room', id: g.hit.id });
           else if (this.sel) this.select(null);
         }
         break;
@@ -485,7 +544,7 @@ export class Editor {
           const wid = this.wallNearPoint(this.toPlan(g.start));
           const w = plan.walls.find((q) => (q.a === g.node || q.b === g.node) && q.id === wid)
             || plan.walls.find((q) => q.a === g.node || q.b === g.node);
-          if (w) this.select({ type: 'wall', id: w.id });
+          if (w) this.select({ type: 'wall', id: w.id, side: this.tapSide(w.id, this.toPlan(g.start)) });
         } else {
           if (g.mergeWith && plan.nodes[g.mergeWith]) G.mergeNodes(plan, g.mergeWith, g.node);
           this.mergeMark = null;
@@ -585,7 +644,9 @@ export class Editor {
       const L = Math.hypot(ref.x, ref.y);
       if (L > 0.5) { dx = ref.x / L; dy = ref.y / L; }
     } else if (d.lastDir) { dx = d.lastDir.x; dy = d.lastDir.y; }
-    const x = G.round1(d.last.x + dx * len), y = G.round1(d.last.y + dy * len);
+    const axisLen = len - this.dimDelta(); // la cote saisie est dans la référence choisie
+    if (axisLen < 1) return false;
+    const x = G.round1(d.last.x + dx * axisLen), y = G.round1(d.last.y + dy * axisLen);
     d.lastDir = { x: dx, y: dy };
     this.addSegment(x, y);
     return true;
@@ -630,11 +691,27 @@ export class Editor {
 
   // ───────── actions du panneau ─────────
 
+  // Longueur du segment sélectionné, dans la référence choisie (face intérieure / extérieure ou axe)
   applyWallLength(len, opts) {
     if (this.sel?.type !== 'wall') return false;
-    let ok = false;
+    const r = G.resolveSide(this.plan, this.layout, this.sel.id, this.sel.side || 1, this.dimRef);
     this.snapshot();
-    ok = G.setWallLength(this.plan, this.sel.id, len, opts);
+    const ok = r.entry
+      ? G.setWallFaceLength(this.plan, this.sel.id, r.side, len, opts)
+      : G.setWallLength(this.plan, this.sel.id, len, opts);
+    if (!ok) this.undoStack.pop();
+    this.afterChange();
+    return ok;
+  }
+
+  // Longueur totale du mur entier (tous les segments alignés), dans la même référence
+  applyChainLength(total, opts) {
+    if (this.sel?.type !== 'wall') return false;
+    const r = G.resolveSide(this.plan, this.layout, this.sel.id, this.sel.side || 1, this.dimRef);
+    this.snapshot();
+    const ok = r.entry
+      ? G.setChainFaceLength(this.plan, this.sel.id, r.side, total, opts)
+      : G.setChainLength(this.plan, this.sel.id, total, opts);
     if (!ok) this.undoStack.pop();
     this.afterChange();
     return ok;
@@ -737,6 +814,9 @@ export class Editor {
       draft: this.tool === 'wall' ? this.draft : null,
       ghost: this.tool === 'opening' ? this.ghost : null,
       mergeMark: this.mergeMark,
+      layout: this.layout,
+      dimRef: this.dimRef,
+      dimDelta: this.dimDelta(),
     });
   }
 
@@ -754,7 +834,7 @@ export class Editor {
     const ctx = c.getContext('2d');
     const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
     const view = { s, ox: (pad - b.x0) * s, oy: (pad - b.y0) * s + head };
-    renderPlan(ctx, W, H, this.plan, this.rooms, view, { layer, dims: this.plan.settings.dims, bg: '#fff' });
+    renderPlan(ctx, W, H, this.plan, this.rooms, view, { layer, dims: this.plan.settings.dims, bg: '#fff', layout: this.layout, dimRef: this.dimRef });
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, head);
     const total = this.rooms.reduce((a, r) => a + r.area, 0);
     ctx.fillStyle = '#111827'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';

@@ -53,3 +53,8 @@ public/    PWA sans build : js/geometry.js (moteur pur, testé), render.js (canv
 ## Idées pour la suite
 
 Calque photo/PDF d'un plan existant à mettre à l'échelle, OIDC (Authentik), plusieurs niveaux, export PDF à l'échelle, rendu 3D.
+
+## Cotes et murs entiers
+
+- **Référence des cotes** : intérieur (défaut), extérieur ou axe. Réglable dans le panneau d'un mur ("Cotes :") ou dans Réglages du plan. Les chiffres affichés, les longueurs saisies (y compris pendant le tracé) suivent cette référence. « ⇄ Autre côté » mesure l'autre face du mur (ex. pièce voisine).
+- **Mur entier** : quand un mur est coupé par des cloisons, le panneau propose « Ce segment » (cote de la pièce) et « Mur entier » (longueur totale). Le mode de répartition (ce segment / au bout / réparti) choisit quel segment absorbe la différence.
