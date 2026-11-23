@@ -648,38 +648,42 @@ export class Editor {
 
   // ───────── outil Mesure ─────────
 
-  // Accroche : coins de faces, nœuds, faces de murs (et axe), sinon point libre.
+  // Accroche obligatoire : bouts et coins de murs (rayon large), puis faces et axe des murs.
+  // Hors d'un mur, aucun point n'est posé.
   measSnap(sp) {
     const S = this.view.s, p = this.toPlan(sp), plan = this.plan;
     const wallsAt = (P) => plan.walls.filter((w) => {
       const a = plan.nodes[w.a], b = plan.nodes[w.b];
       return a && b && G.projectToSegment(P, a, b).d <= w.t / 2 + 0.6;
     }).map((w) => w.id);
-    let best = null, bd = 14 / S;
-    for (const e of this.layout.sides.values()) {
-      const d = G.dist(e.p0, p);
-      if (d < bd) { bd = d; best = { x: e.p0.x, y: e.p0.y }; }
+    // 1) bouts / coins : angles des faces, bouts de murs, nœuds
+    const pts = [];
+    for (const e of this.layout.sides.values()) pts.push(e.p0);
+    for (const n of Object.values(plan.nodes)) pts.push(n);
+    for (const w of plan.walls) {
+      const wi = G.wallInfo(plan, w);
+      for (const q of [wi.a, wi.b]) for (const sg of [-1, 1]) pts.push({ x: q.x + wi.nx * sg * w.t / 2, y: q.y + wi.ny * sg * w.t / 2 });
     }
-    if (!best) {
-      for (const n of Object.values(plan.nodes)) {
-        const d = G.dist(n, p);
-        if (d < bd) { bd = d; best = { x: n.x, y: n.y }; }
-      }
+    let best = null, bd = 20 / S;
+    for (const q of pts) {
+      const d = G.dist(q, p);
+      if (d < bd) { bd = d; best = q; }
     }
     if (best) return { x: G.round1(best.x), y: G.round1(best.y), walls: wallsAt(best), kind: 'corner' };
-    let cand = null, cd = 10 / S;
+    // 2) faces et axe des murs
+    let cand = null, cd = 18 / S;
     for (const w of plan.walls) {
       const a = plan.nodes[w.a], b = plan.nodes[w.b];
       const pr = G.projectToSegment(p, a, b);
       const wi = G.wallInfo(plan, w);
       const sg = (p.x - pr.x) * wi.nx + (p.y - pr.y) * wi.ny >= 0 ? 1 : -1;
       for (const off of [w.t / 2, 0]) {
-        const d = Math.abs(pr.d - off) + (off === 0 ? 3 / S : 0);
-        if (d < cd) { cd = d; cand = { x: pr.x + wi.nx * sg * off, y: pr.y + wi.ny * sg * off, walls: [w.id], kind: off ? 'face' : 'axis', wall: w }; }
+        const d = Math.abs(pr.d - off) + (off === 0 ? 4 / S : 0);
+        if (d < cd) { cd = d; cand = { x: pr.x + wi.nx * sg * off, y: pr.y + wi.ny * sg * off, walls: [w.id], kind: off ? 'face' : 'axis' }; }
       }
     }
     if (cand) return { x: G.round1(cand.x), y: G.round1(cand.y), walls: cand.walls, kind: cand.kind };
-    return { x: G.round1(p.x), y: G.round1(p.y), walls: [], kind: 'free' };
+    return null;
   }
 
   // Entre deux murs parallèles : mesure perpendiculaire, plus facile à viser
@@ -703,14 +707,15 @@ export class Editor {
     const m = this.meas;
     if (!m) return;
     let s = this.measSnap(sp);
-    if (m.A && !m.B) s = this.measAlign(m.A, s);
+    if (s && m.A && !m.B) s = this.measAlign(m.A, s);
     m.preview = s;
     this.draw();
   }
 
   commitMeasPoint() {
     const m = this.meas, pv = m?.preview;
-    if (!pv) return;
+    if (!m) return;
+    if (!pv) { this.hooks.toast?.('Touchez un mur ou une extrémité de mur'); return; }
     if (!m.A || m.B) { m.A = pv; m.B = null; }
     else { if (G.dist(m.A, pv) < 1) return; m.B = pv; }
     m.preview = null;
