@@ -2,8 +2,9 @@
 import { openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo } from './geometry.js';
 
 export const ROOM_COLORS = ['#e8f0fb', '#e4f4e8', '#fdf0dc', '#fbe6ec', '#ece6fa', '#dff3f5', '#f5f0d2', '#eceff1'];
-const DEFAULT_ROOM = '#f4f7fb';
-const WALL = '#2b313a';
+const DEFAULT_ROOM = '#f6f8fb';
+const WALL_FILL = '#d9dee5';   // intérieur des murs
+const WALL_LINE = '#303843';   // contour des murs
 const BLUE = '#2563eb';
 
 const niceUp = (v, list = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]) => list.find((n) => n >= v) || list.at(-1);
@@ -19,6 +20,12 @@ function pill(ctx, text, x, y, { fg = '#334155', bg = 'rgba(255,255,255,.92)', b
   ctx.fillText(text, x, y + 0.5);
 }
 
+function haloText(ctx, text, x, y, { fg = '#52607a', font = '600 11px system-ui, sans-serif', halo = 'rgba(255,255,255,.92)', w = 3.5 } = {}) {
+  ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round'; ctx.lineWidth = w; ctx.strokeStyle = halo; ctx.strokeText(text, x, y + 0.5);
+  ctx.fillStyle = fg; ctx.fillText(text, x, y + 0.5);
+}
+
 function polyPath(ctx, pts, X, Y) {
   ctx.beginPath();
   pts.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y))));
@@ -31,12 +38,12 @@ function drawGrid(ctx, W, H, view) {
   const x0 = -view.ox / S, y0 = -view.oy / S, x1 = (W - view.ox) / S, y1 = (H - view.oy) / S;
   ctx.lineWidth = 1;
   const line = (a, b, c, d) => { ctx.moveTo(a, b); ctx.lineTo(c, d); };
-  ctx.beginPath(); ctx.strokeStyle = '#edf0f4';
+  ctx.beginPath(); ctx.strokeStyle = '#f1f3f6';
   for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) { const sx = Math.round(x * S + view.ox) + 0.5; line(sx, 0, sx, H); }
   for (let y = Math.floor(y0 / step) * step; y <= y1; y += step) { const sy = Math.round(y * S + view.oy) + 0.5; line(0, sy, W, sy); }
   ctx.stroke();
   if (step < 100 && 100 * S >= 18) {
-    ctx.beginPath(); ctx.strokeStyle = '#dde2e8';
+    ctx.beginPath(); ctx.strokeStyle = '#e4e8ed';
     for (let x = Math.floor(x0 / 100) * 100; x <= x1; x += 100) { const sx = Math.round(x * S + view.ox) + 0.5; line(sx, 0, sx, H); }
     for (let y = Math.floor(y0 / 100) * 100; y <= y1; y += 100) { const sy = Math.round(y * S + view.oy) + 0.5; line(0, sy, W, sy); }
     ctx.stroke();
@@ -51,13 +58,13 @@ function drawDoorSymbol(ctx, g, o, S, X, Y) {
     // charnière (hx,hy), le vantail ouvert est perpendiculaire au mur, côté « side »
     const ex = hx + nx * side * r, ey = hy + ny * side * r;
     ctx.beginPath(); ctx.moveTo(X(hx), Y(hy)); ctx.lineTo(X(ex), Y(ey));
-    ctx.lineWidth = 2; ctx.strokeStyle = '#1f2937'; ctx.stroke();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = WALL_LINE; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
     const a0 = Math.atan2(diry, dirx), a1 = Math.atan2(ny * side, nx * side);
     let diff = a1 - a0;
     while (diff > Math.PI) diff -= 2 * Math.PI;
     while (diff < -Math.PI) diff += 2 * Math.PI;
     ctx.beginPath(); ctx.arc(X(hx), Y(hy), r * S, a0, a1, diff < 0);
-    ctx.lineWidth = 1; ctx.strokeStyle = '#6b7280'; ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = '#8b96a5'; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
   };
   if (o.kind === 'double') {
     leaf(c.x - ux * half, c.y - uy * half, ux, uy, half);
@@ -73,7 +80,7 @@ function drawOpeningSymbol(ctx, g, o, S, X, Y) {
   const half = o.w / 2;
   const P = (a, b) => [X(c.x + ux * a + nx * b), Y(c.y + uy * a + ny * b)];
   const seg = (a1, b1, a2, b2) => { const p = P(a1, b1), q = P(a2, b2); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); };
-  ctx.lineWidth = 1.2; ctx.strokeStyle = '#1f2937';
+  ctx.lineWidth = 1.2; ctx.strokeStyle = WALL_LINE; ctx.lineJoin = 'round';
   if (o.kind === 'door' || o.kind === 'double') {
     // seuil
     ctx.beginPath(); seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2); ctx.stroke();
@@ -83,13 +90,13 @@ function drawOpeningSymbol(ctx, g, o, S, X, Y) {
     seg(-half, t / 2, half, t / 2); seg(-half, -t / 2, half, -t / 2);
     seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2);
     ctx.stroke();
-    ctx.beginPath(); ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 1.6; seg(-half, 0, half, 0); ctx.stroke();
+    ctx.beginPath(); ctx.strokeStyle = '#7fb0ee'; ctx.lineWidth = 1.5; seg(-half, 0, half, 0); ctx.stroke();
   } else if (o.kind === 'bay') {
     ctx.beginPath();
     seg(-half, t / 2, half, t / 2); seg(-half, -t / 2, half, -t / 2);
     seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2);
     ctx.stroke();
-    ctx.beginPath(); ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.strokeStyle = '#7fb0ee'; ctx.lineWidth = 1.5;
     seg(-half, t / 6, half * 0.1, t / 6); seg(-half * 0.1, -t / 6, half, -t / 6);
     ctx.stroke();
   } else {
@@ -189,19 +196,24 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
   lctx.setTransform(1, 0, 0, 1, 0, 0);
   lctx.clearRect(0, 0, layer.width, layer.height);
   lctx.setTransform(ctx.getTransform());
-  lctx.lineCap = 'square'; lctx.strokeStyle = WALL;
-  for (const w of plan.walls) {
-    const a = plan.nodes[w.a], b = plan.nodes[w.b];
-    if (!a || !b) continue;
-    lctx.lineWidth = Math.max(w.t * S, 1.5);
-    lctx.beginPath(); lctx.moveTo(X(a.x), Y(a.y)); lctx.lineTo(X(b.x), Y(b.y)); lctx.stroke();
+  lctx.lineCap = 'square'; lctx.lineJoin = 'miter';
+  const ow = Math.max(1.1, Math.min(1.8, S * 4)); // épaisseur du trait de contour (px)
+  for (const pass of [0, 1]) {
+    lctx.strokeStyle = pass === 0 ? WALL_LINE : WALL_FILL;
+    for (const w of plan.walls) {
+      const a = plan.nodes[w.a], b = plan.nodes[w.b];
+      if (!a || !b) continue;
+      const base = Math.max(w.t * S, 2.2);
+      lctx.lineWidth = pass === 0 ? base + ow * 2 : base;
+      lctx.beginPath(); lctx.moveTo(X(a.x), Y(a.y)); lctx.lineTo(X(b.x), Y(b.y)); lctx.stroke();
+    }
   }
   lctx.globalCompositeOperation = 'destination-out';
   lctx.fillStyle = '#000';
   for (const op of plan.openings) {
     const g = openingGeom(plan, op);
     if (!g) continue;
-    const h = op.w / 2, th = g.t / 2 + 2 / S;
+    const h = op.w / 2, th = g.t / 2 + (ow + 1) / S;
     const P = (a, b) => [X(g.c.x + g.ux * a + g.nx * b), Y(g.c.y + g.uy * a + g.ny * b)];
     lctx.beginPath();
     [[-h, -th], [h, -th], [h, th], [-h, th]].forEach(([a, b], i) => { const p = P(a, b); i ? lctx.lineTo(p[0], p[1]) : lctx.moveTo(p[0], p[1]); });
@@ -218,7 +230,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
     const w = plan.walls.find((q) => q.id === sel.id);
     if (w) {
       const a = plan.nodes[w.a], b = plan.nodes[w.b];
-      ctx.lineCap = 'butt'; ctx.lineWidth = w.t * S + 8; ctx.strokeStyle = 'rgba(37,99,235,.35)';
+      ctx.lineCap = 'butt'; ctx.lineWidth = Math.max(w.t * S, 2.2) + 7; ctx.strokeStyle = 'rgba(37,99,235,.28)';
       ctx.beginPath(); ctx.moveTo(X(a.x), Y(a.y)); ctx.lineTo(X(b.x), Y(b.y)); ctx.stroke();
     }
   }
@@ -248,12 +260,12 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
   for (const r of rooms) {
     if (Math.sqrt(r.area) * S < 70) continue;
     const cx = X(r.center.x), cy = Y(r.center.y);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#1f2937';
+    const halo = r.color || DEFAULT_ROOM;
     if (r.name) {
-      ctx.font = '700 14px system-ui, sans-serif'; ctx.fillText(r.name, cx, cy - 9);
-      ctx.font = '500 12px system-ui, sans-serif'; ctx.fillStyle = '#475569'; ctx.fillText(fmtArea(r.area), cx, cy + 8);
+      haloText(ctx, r.name, cx, cy - 9, { fg: '#1e293b', font: '700 14px system-ui, sans-serif', halo, w: 4 });
+      haloText(ctx, fmtArea(r.area), cx, cy + 8, { fg: '#64748b', font: '500 12px system-ui, sans-serif', halo, w: 4 });
     } else {
-      ctx.font = '600 12px system-ui, sans-serif'; ctx.fillStyle = '#475569'; ctx.fillText(fmtArea(r.area), cx, cy);
+      haloText(ctx, fmtArea(r.area), cx, cy, { fg: '#64748b', font: '600 12px system-ui, sans-serif', halo, w: 4 });
     }
   }
 
@@ -263,7 +275,9 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
       const wi = wallInfo(plan, w);
       if (wi.len * S < 38) continue;
       const hot = sel?.type === 'wall' && sel.id === w.id;
-      pill(ctx, fmtLen(wi.len), X((wi.a.x + wi.b.x) / 2), Y((wi.a.y + wi.b.y) / 2), hot ? { fg: '#fff', bg: BLUE, border: BLUE } : {});
+      const mx = X((wi.a.x + wi.b.x) / 2), my = Y((wi.a.y + wi.b.y) / 2);
+      if (hot) pill(ctx, fmtLen(wi.len), mx, my, { fg: '#fff', bg: BLUE, border: BLUE });
+      else haloText(ctx, fmtLen(wi.len), mx, my);
     }
   }
   if (sel?.type === 'opening') {
@@ -285,12 +299,13 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
     }
   }
 
-  // nœuds
+  // nœuds : seuls ceux du mur sélectionné (poignées) ou, en mode mur, tous les points (discrets)
   if (o.showNodes) {
     for (const [id, n] of Object.entries(plan.nodes)) {
       const hot = sel?.type === 'wall' && plan.walls.some((w) => w.id === sel.id && (w.a === id || w.b === id));
-      ctx.beginPath(); ctx.arc(X(n.x), Y(n.y), hot ? 9 : 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = hot ? 2.5 : 1.3; ctx.strokeStyle = hot ? BLUE : '#64748b'; ctx.stroke();
+      if (!hot && !o.allNodes) continue;
+      ctx.beginPath(); ctx.arc(X(n.x), Y(n.y), hot ? 8 : 2.6, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = hot ? 2.2 : 1.1; ctx.strokeStyle = hot ? BLUE : '#7b8798'; ctx.stroke();
     }
   }
 

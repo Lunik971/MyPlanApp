@@ -732,6 +732,7 @@ export class Editor {
       grid: true,
       dims: this.plan.settings.dims,
       showNodes: this.tool === 'select' || this.tool === 'wall',
+      allNodes: this.tool === 'wall',
       handles: this.tool === 'select',
       draft: this.tool === 'wall' ? this.draft : null,
       ghost: this.tool === 'opening' ? this.ghost : null,
