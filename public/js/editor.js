@@ -163,6 +163,7 @@ export class Editor {
     else if (s.type === 'opening') ok = this.plan.openings.some((o) => o.id === s.id);
     else if (s.type === 'furniture') ok = this.plan.furniture.some((f) => f.id === s.id);
     else if (s.type === 'room') ok = this.rooms.some((r) => r.id === s.id);
+    else if (s.type === 'measure') ok = (this.plan.measures || []).some((m) => m.id === s.id);
     if (!ok) { this.sel = null; this.hooks.select?.(null); }
   }
 
@@ -179,6 +180,7 @@ export class Editor {
     if (s.type === 'opening') return this.plan.openings.find((o) => o.id === s.id) || null;
     if (s.type === 'furniture') return this.plan.furniture.find((f) => f.id === s.id) || null;
     if (s.type === 'room') return this.rooms.find((r) => r.id === s.id) || null;
+    if (s.type === 'measure') return (this.plan.measures || []).find((m) => m.id === s.id) || null;
     return null;
   }
 
@@ -341,6 +343,14 @@ export class Editor {
       if (Math.abs(along) <= o.w / 2 + 6 / S && Math.abs(across) <= Math.max(g.t / 2, 10 / S)) return { type: 'opening', id: o.id };
     }
     if (plan.settings.dims) {
+      for (const m of plan.measures || []) {
+        const d = G.measureDim(plan, m, S);
+        if (!d) continue;
+        const sp = this.toScreen(d.mid), cp = this.toScreen(p);
+        if (Math.abs(sp.x - cp.x) < 32 && Math.abs(sp.y - cp.y) < 13) return { type: 'measure', id: m.id };
+      }
+    }
+    if (plan.settings.dims) {
       const mode = plan.settings.dimRef || 'inner';
       for (const l of G.dimLabels(plan, this.layout, mode, 11 / S)) {
         const sp = this.toScreen(l), cp = this.toScreen(p);
@@ -455,6 +465,7 @@ export class Editor {
         g.kind = 'dragFurniture'; g.orig = { x: f.x, y: f.y }; return;
       }
       if (h.type === 'opening') { this.select({ type: 'opening', id: h.id }); g.kind = 'dragOpening'; return; }
+      if (h.type === 'measure') { g.kind = 'pan'; return; }
       if (h.type === 'label') { g.kind = 'pan'; return; } // toucher un chiffre sélectionne ce mur et cette face
       if (h.type === 'node') { g.kind = 'dragNode'; g.node = h.id; g.orig = { ...this.plan.nodes[h.id] }; return; }
       if (h.type === 'wall') {
@@ -581,7 +592,8 @@ export class Editor {
     switch (g.kind) {
       case 'pan':
         if (!g.moved) {
-          if (g.hit?.type === 'label') this.select({ type: 'wall', id: g.hit.wall, side: g.hit.side });
+          if (g.hit?.type === 'measure') this.select({ type: 'measure', id: g.hit.id });
+          else if (g.hit?.type === 'label') this.select({ type: 'wall', id: g.hit.wall, side: g.hit.side });
           else if (g.hit?.type === 'room') this.select({ type: 'room', id: g.hit.id });
           else if (this.sel) this.select(null);
         }
@@ -724,8 +736,15 @@ export class Editor {
     const m = this.meas, pv = m?.preview;
     if (!m) return;
     if (!pv) { this.hooks.toast?.('Touchez un mur ou une extrémité de mur'); return; }
-    if (!m.A || m.B) { m.A = pv; m.B = null; }
-    else { if (G.dist(m.A, pv) < 1) return; m.B = pv; }
+    if (!m.A || m.B) { m.A = pv; m.B = null; m.id = null; }
+    else {
+      if (G.dist(m.A, pv) < 1) return;
+      m.B = pv;
+      this.snapshot();
+      const sm = G.addMeasure(this.plan, m.A, pv); // la mesure reste affichée sur le plan
+      m.id = sm?.id || null;
+      this.afterChange();
+    }
     m.preview = null;
     this.hooks.meas?.(m);
     this.draw();
@@ -743,6 +762,14 @@ export class Editor {
     this.meas = { A: null, B: null, preview: null };
     this.hooks.meas?.(this.meas);
     this.draw();
+  }
+
+  removeActiveMeasure() {
+    const m = this.meas;
+    if (!m?.id) return this.resetMeasure();
+    const id = m.id;
+    this.mutate((plan) => { plan.measures = plan.measures.filter((q) => q.id !== id); });
+    this.resetMeasure();
   }
 
   toggleMeasureLock() {
@@ -957,6 +984,7 @@ export class Editor {
     if (s.type === 'wall') this.mutate((plan) => G.removeWall(plan, s.id));
     else if (s.type === 'opening') this.mutate((plan) => { plan.openings = plan.openings.filter((o) => o.id !== s.id); });
     else if (s.type === 'furniture') this.mutate((plan) => { plan.furniture = plan.furniture.filter((f) => f.id !== s.id); });
+    else if (s.type === 'measure') this.mutate((plan) => { plan.measures = plan.measures.filter((m) => m.id !== s.id); });
     else if (s.type === 'room') {
       const r = this.selected;
       if (r?.labelId) this.mutate((plan) => { plan.rooms = plan.rooms.filter((l) => l.id !== r.labelId); });
@@ -998,6 +1026,7 @@ export class Editor {
       ghost: this.tool === 'opening' ? this.ghost : null,
       mergeMark: this.mergeMark,
       layout: this.layout,
+      activeMeasure: this.tool === 'measure' ? this.meas?.id : null,
       dimRef: this.dimRef,
       dimDelta: this.dimDelta(),
       meas: this.tool === 'measure' ? this.meas : null,

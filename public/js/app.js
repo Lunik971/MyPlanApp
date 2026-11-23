@@ -415,7 +415,8 @@ function buildMeasBar() {
   bar.append(
     h('div', { class: 'row tight' }, h('label', {}, 'Cote (cm)', input),
       h('button', { class: 'chip' + (info.locked ? ' on' : ''), onclick: () => editor.toggleMeasureLock() }, info.locked ? '🔒 Verrouillée' : info.lockable ? '🔓 Verrouiller' : '🔓 Libre'),
-      h('button', { class: 'chip', onclick: () => editor.resetMeasure() }, 'Nouvelle')),
+      h('button', { class: 'chip', onclick: () => editor.resetMeasure() }, 'Nouvelle'),
+      h('button', { class: 'chip', title: 'Retirer cette mesure du plan', onclick: () => editor.removeActiveMeasure() }, '🗑')),
     h('div', { class: 'row tight' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
     info.lockable ? null : h('p', { class: 'note' }, 'Points libres : la cote règle la distance mais ne peut pas être verrouillée.'),
   );
@@ -447,6 +448,7 @@ function ensureVisible() {
   if (s.type === 'wall') { const a = editor.plan.nodes[o.a], b = editor.plan.nodes[o.b]; c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
   else if (s.type === 'opening') { const g = G.openingGeom(editor.plan, o); c = g?.c; }
   else if (s.type === 'room') c = o.center;
+  else if (s.type === 'measure') return;
   else c = { x: o.x, y: o.y };
   if (c) editor.ensureVisible(c, 70);
 }
@@ -495,6 +497,7 @@ function buildPanel(type) {
   if (type === 'wall') return wallPanel();
   if (type === 'opening') return openingPanel();
   if (type === 'furniture') return furniturePanel();
+  if (type === 'measure') return measurePanel();
   return roomPanel();
 }
 
@@ -577,6 +580,13 @@ function openingPanel() {
     ),
     h('p', { class: 'note' }, 'Glissez l’ouverture le long du mur (ou vers un autre mur) pour la déplacer.'),
   );
+}
+
+function measurePanel() {
+  const len = () => { const d = G.measureDim(editor.plan, editor.selected, 1); return d ? d.len : 0; };
+  return h('div', {},
+    panelHead('Mesure', h('span', { class: 'muted' }, textBind(() => G.fmtLen(len())))),
+    h('p', { class: 'note' }, 'Mesure conservée : elle suit les murs. Pour la modifier, utilisez l’outil Mesure ; 🗑 la supprime.'));
 }
 
 function furniturePanel() {

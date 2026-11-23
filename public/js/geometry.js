@@ -27,6 +27,7 @@ export function emptyPlan() {
     rooms: [],
     furniture: [],
     locks: [],
+    measures: [],
     settings: { wallT: 10, grid: 10, dims: true, dimRef: 'inner' },
   };
 }
@@ -35,7 +36,7 @@ export function normalizePlan(p) {
   const b = emptyPlan();
   const q = { ...b, ...(p || {}) };
   q.nodes = q.nodes || {};
-  for (const k of ['walls', 'openings', 'rooms', 'furniture', 'locks']) if (!Array.isArray(q[k])) q[k] = [];
+  for (const k of ['walls', 'openings', 'rooms', 'furniture', 'locks', 'measures']) if (!Array.isArray(q[k])) q[k] = [];
   q.settings = { ...b.settings, ...(q.settings || {}) };
   return q;
 }
@@ -872,3 +873,63 @@ export function adjustMeasure(plan, A, B, newLen, { move = 'b' } = {}) {
   return true;
 }
 
+
+
+// ───────────────────────── mesures conservées ─────────────────────────
+// Chaque extrémité est ancrée sur un mur (position le long du mur, décalage de l'axe) : la mesure
+// suit le mur quand il bouge, et sa valeur est toujours recalculée.
+
+export function anchorPoint(plan, P) {
+  const w = plan.walls.find((q) => q.id === P.walls?.[0]);
+  if (!w) return null;
+  const wi = wallInfo(plan, w);
+  const dx = P.x - wi.a.x, dy = P.y - wi.a.y;
+  return { wall: w.id, pos: round1(dx * wi.ux + dy * wi.uy), off: round1(dx * wi.nx + dy * wi.ny) };
+}
+
+export function resolveAnchor(plan, an) {
+  const w = plan.walls.find((q) => q.id === an?.wall);
+  if (!w) return null;
+  const wi = wallInfo(plan, w);
+  return { x: wi.a.x + wi.ux * an.pos + wi.nx * an.off, y: wi.a.y + wi.uy * an.pos + wi.ny * an.off };
+}
+
+export function measureEnds(plan, m) {
+  const A = resolveAnchor(plan, m.a), B = resolveAnchor(plan, m.b);
+  return A && B ? { A, B } : null;
+}
+
+export function addMeasure(plan, A, B) {
+  const a = anchorPoint(plan, A), b = anchorPoint(plan, B);
+  if (!a || !b) return null;
+  plan.measures ||= [];
+  const ends = (m) => measureEnds(plan, m);
+  const dup = plan.measures.find((m) => {
+    const e = ends(m);
+    return e && ((dist(e.A, A) < 0.6 && dist(e.B, B) < 0.6) || (dist(e.A, B) < 0.6 && dist(e.B, A) < 0.6));
+  });
+  if (dup) return dup;
+  const m = { id: uid('m'), a, b };
+  plan.measures.push(m);
+  return m;
+}
+
+// Cote reportée hors du plan : ligne parallèle décalée au-delà de l'emprise, prolongée par des pointillés.
+export function measureDim(plan, m, S) {
+  const e = measureEnds(plan, m);
+  if (!e) return null;
+  const { A, B } = e;
+  const len = dist(A, B);
+  if (len < 1) return null;
+  const ux = (B.x - A.x) / len, uy = (B.y - A.y) / len;
+  let nx = -uy, ny = ux;
+  const bb = planBounds(plan) || { x0: A.x, y0: A.y, x1: B.x, y1: B.y };
+  const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+  const cen = { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 };
+  if ((mid.x - cen.x) * nx + (mid.y - cen.y) * ny < 0) { nx = -nx; ny = -ny; }
+  let D = 0;
+  for (const c of [[bb.x0, bb.y0], [bb.x1, bb.y0], [bb.x1, bb.y1], [bb.x0, bb.y1]]) D = Math.max(D, (c[0] - A.x) * nx + (c[1] - A.y) * ny);
+  D += 26 / S;
+  const A2 = { x: A.x + nx * D, y: A.y + ny * D }, B2 = { x: B.x + nx * D, y: B.y + ny * D };
+  return { A, B, A2, B2, mid: { x: (A2.x + B2.x) / 2, y: (A2.y + B2.y) / 2 }, len, nx, ny, ux, uy };
+}

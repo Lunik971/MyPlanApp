@@ -67,3 +67,5 @@ Calque photo/PDF d'un plan existant à mettre à l'échelle, OIDC (Authentik), p
 ## Portes
 
 Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre, baie vitrée, ouverture, **arche** et **cadre sans porte**. Choisissez le type dans l'outil « Porte / fenêtre » ou en touchant une ouverture existante.
+
+**Mesures conservées** : une mesure posée avec l'outil Mesure reste sur le plan, reportée hors du bâtiment (ligne de cote parallèle, pointillés à chaque extrémité). Elle suit les murs quand ils bougent. Touchez son chiffre (outil Sélection) pour la supprimer ; le bouton ⟷ masque aussi les mesures.

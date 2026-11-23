@@ -1,5 +1,5 @@
 // Rendu 2D du plan sur un canvas. Aucune mutation du plan ici.
-import { openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo, dimLabels, resolveSide, wallChain } from './geometry.js';
+import { measureDim, openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo, dimLabels, resolveSide, wallChain } from './geometry.js';
 
 export const ROOM_COLORS = ['#e8f0fb', '#e4f4e8', '#fdf0dc', '#fbe6ec', '#ece6fa', '#dff3f5', '#f5f0d2', '#eceff1'];
 const DEFAULT_ROOM = '#f6f8fb';
@@ -380,6 +380,32 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
       ctx.beginPath();
       [[-h, -th], [h, -th], [h, th], [-h, th]].forEach(([a, b], i) => { const p = P(a, b); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
       ctx.closePath(); ctx.fillStyle = 'rgba(37,99,235,.25)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = BLUE; ctx.stroke();
+    }
+  }
+
+  // mesures conservées : cotes reportées hors du plan avec pointillés aux extrémités
+  if (o.dims) {
+    for (const m of plan.measures || []) {
+      if (o.meas && m.id === o.activeMeasure) continue;
+      const d = measureDim(plan, m, S);
+      if (!d) continue;
+      const on = sel?.type === 'measure' && sel.id === m.id;
+      const col = on ? BLUE : '#5b7db8';
+      ctx.save();
+      ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.setLineDash([2, 4]); ctx.lineWidth = 1; ctx.strokeStyle = on ? BLUE : 'rgba(91,125,184,.75)';
+      ctx.moveTo(X(d.A.x), Y(d.A.y)); ctx.lineTo(X(d.A2.x), Y(d.A2.y));
+      ctx.moveTo(X(d.B.x), Y(d.B.y)); ctx.lineTo(X(d.B2.x), Y(d.B2.y));
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.lineWidth = on ? 2 : 1.2; ctx.strokeStyle = col;
+      ctx.moveTo(X(d.A2.x), Y(d.A2.y)); ctx.lineTo(X(d.B2.x), Y(d.B2.y));
+      for (const q of [d.A2, d.B2]) { // petits traits obliques aux extrémités
+        const sx = X(q.x), sy = Y(q.y), tx = (d.ux + d.nx) * 5, ty = (d.uy + d.ny) * 5;
+        ctx.moveTo(sx - tx, sy - ty); ctx.lineTo(sx + tx, sy + ty);
+      }
+      ctx.stroke();
+      ctx.restore();
+      haloText(ctx, fmtLen(d.len), X(d.mid.x), Y(d.mid.y), { fg: on ? BLUE : '#3d5f9c', font: '600 11px system-ui, sans-serif' });
     }
   }
 
