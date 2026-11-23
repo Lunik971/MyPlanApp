@@ -1,0 +1,54 @@
+# Plan appart
+
+Appli web (PWA, pensée pour le mobile) pour **dessiner le plan d'un appartement**, obtenir la **surface de chaque pièce**, poser des **portes et fenêtres de taille libre** et **aménager** avec du mobilier à l'échelle. Les plans sont enregistrés sur ton serveur, derrière une connexion.
+
+## Fonctions
+
+- Tracé des murs au doigt (accrochage aux points, aux murs et aux angles de 45°) avec **cotes en direct** ; saisie d'une longueur au clavier (`345`, `3,45 m`, `3m45`) puis un sens (← ↑ ↓ →).
+- **Corriger une mesure** : toucher un mur, saisir la bonne longueur. Mode « Étirer la pièce » (garde les angles droits, le reste du plan suit) ou « Ce point seul ».
+- **Pièces détectées automatiquement** dès que des murs se referment ; surface intérieure (épaisseur des murs déduite), périmètre, côtés, nom et couleur ; total.
+- **Portes** (simple, double, sens et charnière réglables), **fenêtres**, **baies vitrées**, **ouvertures** : largeur, hauteur, allège libres ; glissables le long des murs.
+- **Mobilier** à l'échelle (catalogue + dimensions personnalisées), déplacement, rotation, duplication.
+- Annuler / rétablir, zoom et déplacement à deux doigts, export PNG, duplication d'un plan (pour tester un autre aménagement).
+- Enregistrement automatique, copie locale en cas de coupure réseau, détection de modification depuis un autre appareil.
+- Installable sur l'écran d'accueil (Android/iOS/desktop).
+
+Les murs sont cotés **à l'axe** ; les surfaces des pièces sont calculées **à l'intérieur** des murs.
+
+## Lancer
+
+```bash
+cp .env.example .env      # facultatif : compte initial
+docker compose up -d --build
+# → http://localhost:3000   (le premier visiteur crée le compte s'il n'y a pas ADMIN_USER)
+```
+
+Sans Docker : `npm install && npm start` (Node ≥ 20 ; données dans `./data`, variable `DATA_DIR`).
+
+Derrière un reverse proxy HTTPS, transmettre `X-Forwarded-Proto` : le cookie de session est alors marqué `Secure` automatiquement. Les données (SQLite) sont dans le volume `/data` : c'est le seul dossier à sauvegarder.
+
+### Comptes
+
+```bash
+docker compose exec plan-appart node server/cli.js add  <identifiant> <mot de passe>
+docker compose exec plan-appart node server/cli.js passwd <identifiant> <nouveau mot de passe>
+docker compose exec plan-appart node server/cli.js list
+```
+
+## Tests
+
+```bash
+npm test                  # géométrie + API
+node scripts/e2e.mjs      # parcours complet dans Chrome en émulation mobile (playwright requis)
+```
+
+## Structure
+
+```
+server/    Express + SQLite (better-sqlite3), sessions par cookie (scrypt), API /api/plans
+public/    PWA sans build : js/geometry.js (moteur pur, testé), render.js (canvas), editor.js (gestes), app.js (écrans)
+```
+
+## Idées pour la suite
+
+Calque photo/PDF d'un plan existant à mettre à l'échelle, OIDC (Authentik), plusieurs niveaux, export PDF à l'échelle, rendu 3D.

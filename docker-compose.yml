@@ -1,0 +1,21 @@
+services:
+  plan-appart:
+    build: .
+    container_name: plan-appart
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Compte créé au premier démarrage (facultatif : sinon le 1er visiteur crée le compte)
+      ADMIN_USER: ${ADMIN_USER:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Autoriser d'autres inscriptions depuis l'écran de connexion
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      # true : tous les comptes voient tous les plans (foyer) ; false : chacun les siens
+      PLANS_SHARED: ${PLANS_SHARED:-true}
+      # Durée de la session en jours (renouvelée à l'usage)
+      SESSION_DAYS: ${SESSION_DAYS:-60}
+      # Derrière un reverse proxy HTTPS (nginx, NPM, Traefik…) : nombre de proxys de confiance
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    volumes:
+      - ./data:/data
