@@ -63,3 +63,7 @@ Calque photo/PDF d'un plan existant à mettre à l'échelle, OIDC (Authentik), p
 
 - **Mesure** : touchez deux points (face de mur, coin, axe). Entre deux murs parallèles, la mesure est perpendiculaire. Saisissez la cote : tout ce qui est au-delà du 2e point (ou en deçà du 1er, au choix) se décale pour l'obtenir.
 - **Verrouillage** : une cote saisie (panneau du mur, mur entier ou outil Mesure) est verrouillée par défaut (🔒 affiché sur le plan). Une modification qui la ferait changer est refusée et annulée ; déverrouillez-la d'abord. Retaper une cote verrouillée la met à jour.
+
+## Portes
+
+Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre, baie vitrée, ouverture, **arche** et **cadre sans porte**. Choisissez le type dans l'outil « Porte / fenêtre » ou en touchant une ouverture existante.

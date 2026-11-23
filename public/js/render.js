@@ -57,14 +57,18 @@ function drawDoorSymbol(ctx, g, o, S, X, Y) {
   const leaf = (hx, hy, dirx, diry, r) => {
     // charnière (hx,hy), le vantail ouvert est perpendiculaire au mur, côté « side »
     const ex = hx + nx * side * r, ey = hy + ny * side * r;
-    ctx.beginPath(); ctx.moveTo(X(hx), Y(hy)); ctx.lineTo(X(ex), Y(ey));
-    ctx.lineWidth = 1.6; ctx.strokeStyle = WALL_LINE; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
     const a0 = Math.atan2(diry, dirx), a1 = Math.atan2(ny * side, nx * side);
     let diff = a1 - a0;
     while (diff > Math.PI) diff -= 2 * Math.PI;
     while (diff < -Math.PI) diff += 2 * Math.PI;
+    // zone de débattement teintée, puis arc, puis vantail bien marqué
+    ctx.beginPath(); ctx.moveTo(X(hx), Y(hy)); ctx.arc(X(hx), Y(hy), r * S, a0, a1, diff < 0); ctx.closePath();
+    ctx.fillStyle = 'rgba(37,99,235,.09)'; ctx.fill();
     ctx.beginPath(); ctx.arc(X(hx), Y(hy), r * S, a0, a1, diff < 0);
-    ctx.lineWidth = 1; ctx.strokeStyle = '#8b96a5'; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 1.2; ctx.strokeStyle = '#5b6b82'; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(X(hx), Y(hy)); ctx.lineTo(X(ex), Y(ey));
+    ctx.lineWidth = 2.4; ctx.strokeStyle = BLUE; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.arc(X(hx), Y(hy), 2.6, 0, Math.PI * 2); ctx.fillStyle = BLUE; ctx.fill();
   };
   if (o.kind === 'double') {
     leaf(c.x - ux * half, c.y - uy * half, ux, uy, half);
@@ -72,6 +76,43 @@ function drawDoorSymbol(ctx, g, o, S, X, Y) {
   } else {
     const hd = o.flip ? 1 : -1;
     leaf(c.x + ux * half * hd, c.y + uy * half * hd, -ux * hd, -uy * hd, o.w);
+  }
+}
+
+function drawPassage(ctx, g, o, S, X, Y, P, seg) {
+  const { t } = g;
+  const half = o.w / 2;
+  ctx.lineWidth = 1.8; ctx.strokeStyle = WALL_LINE;
+  if (o.kind === 'arch') {
+    // arche : montants à bouts arrondis + trait pointillé de linteau
+    ctx.lineWidth = 1.6;
+    const r = Math.min(t / 2, 14);
+    ctx.beginPath();
+    for (const sd of [-1, 1]) {
+      const ex = half * sd;
+      for (const fy of [-1, 1]) {
+        const a = P(ex, fy * (t / 2 - r)), b = P(ex - sd * r, fy * t / 2);
+        const cc = P(ex - sd * r, fy * (t / 2 - r));
+        ctx.moveTo(a[0], a[1]);
+        ctx.quadraticCurveTo(P(ex, fy * t / 2)[0], P(ex, fy * t / 2)[1], b[0], b[1]);
+        void cc;
+      }
+      seg(ex, t / 2 - r, ex, -(t / 2 - r));
+    }
+    ctx.stroke();
+    ctx.beginPath(); ctx.setLineDash([3, 3]); ctx.strokeStyle = '#5b6b82'; ctx.lineWidth = 1; seg(-half, 0, half, 0); ctx.stroke(); ctx.setLineDash([]);
+  } else if (o.kind === 'frame') {
+    // cadre de porte sans vantail : deux montants pleins + seuil
+    const fw = Math.min(6, o.w / 4);
+    ctx.fillStyle = WALL_LINE;
+    for (const sd of [-1, 1]) {
+      ctx.beginPath();
+      [[sd * half, t / 2], [sd * (half - fw), t / 2], [sd * (half - fw), -t / 2], [sd * half, -t / 2]].forEach(([a, b], i) => { const p = P(a, b); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.beginPath(); ctx.setLineDash([3, 3]); ctx.strokeStyle = '#5b6b82'; ctx.lineWidth = 1; seg(-half + fw, 0, half - fw, 0); ctx.stroke(); ctx.setLineDash([]);
+  } else {
+    ctx.beginPath(); seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2); ctx.stroke();
   }
 }
 
@@ -83,8 +124,15 @@ function drawOpeningSymbol(ctx, g, o, S, X, Y) {
   ctx.lineWidth = 1.2; ctx.strokeStyle = WALL_LINE; ctx.lineJoin = 'round';
   if (o.kind === 'door' || o.kind === 'double') {
     // seuil
+    ctx.lineWidth = 1.8;
     ctx.beginPath(); seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2); ctx.stroke();
     drawDoorSymbol(ctx, g, o, S, X, Y);
+  } else if (o.kind === 'arch' || o.kind === 'frame' || o.kind === 'opening') {
+    // bande teintée : le passage reste visible même sans vantail
+    ctx.beginPath();
+    [[-half, t / 2], [half, t / 2], [half, -t / 2], [-half, -t / 2]].forEach(([a, b], i) => { const q = P(a, b); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+    ctx.closePath(); ctx.fillStyle = 'rgba(37,99,235,.10)'; ctx.fill();
+    drawPassage(ctx, g, o, S, X, Y, P, seg);
   } else if (o.kind === 'window') {
     ctx.beginPath();
     seg(-half, t / 2, half, t / 2); seg(-half, -t / 2, half, -t / 2);

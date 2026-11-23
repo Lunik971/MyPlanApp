@@ -402,6 +402,8 @@ export const OPENING_KINDS = {
   window: { label: 'Fenêtre', w: 100, h: 120, sill: 90 },
   bay: { label: 'Baie vitrée', w: 180, h: 215, sill: 0 },
   opening: { label: 'Ouverture', w: 90, h: 204, sill: 0 },
+  arch: { label: 'Arche', w: 100, h: 230, sill: 0 },
+  frame: { label: 'Cadre sans porte', w: 83, h: 204, sill: 0 },
 };
 
 export function clampOpening(plan, o) {
