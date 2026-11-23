@@ -219,7 +219,7 @@ let panelKey = '', panelSync = [];
 function ensureEditor() {
   if (editor) return;
   editor = new Editor($('#cv'), {
-    change: onChange, select: onSelect, draft: onDraft, tool: onTool, history: updateHistory, toast, live: onLive,
+    change: onChange, select: onSelect, draft: onDraft, meas: () => buildMeasBar(), tool: onTool, history: updateHistory, toast, live: onLive,
   });
   // la vue utile s'arrête au-dessus du panneau d'outils (barre de tracé, panneau de sélection…)
   const dock = $('#dock');
@@ -314,6 +314,7 @@ const ICONS = {
   wall: '<path d="M4 20V5h16M4 20h6"/><path d="M4 5v0" stroke-width="4"/>',
   opening: '<path d="M5 21V4h11v17M3 21h18"/><circle cx="13" cy="13" r=".8" fill="currentColor"/>',
   furniture: '<path d="M4 11V8a2 2 0 012-2h12a2 2 0 012 2v3"/><path d="M3 13a2 2 0 014 0v2h10v-2a2 2 0 014 0v5H3z"/>',
+  measure: '<path d="M3 16l13-13 5 5L8 21z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2"/>',
   rooms: '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h9M13 4v16"/>',
 };
 const svg = (n) => { const w = document.createElement('span'); w.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n]}</svg>`; return w.firstChild; };
@@ -325,6 +326,7 @@ function buildTools() {
     ['select', 'Sélection', () => editor.setTool('select')],
     ['wall', 'Mur', () => editor.setTool('wall')],
     ['opening', 'Porte / fenêtre', () => editor.setTool('opening')],
+    ['measure', 'Mesure', () => editor.setTool('measure')],
     ['furniture', 'Meuble', () => furnitureSheet()],
     ['rooms', 'Surfaces', () => roomsSheet()],
   ];
@@ -337,6 +339,9 @@ function onTool(tool) {
   for (const b of $('#tools').children) b.classList.toggle('on', b.dataset.tool === tool);
   $('#draftbar').hidden = tool !== 'wall';
   $('#kindbar').hidden = tool !== 'opening';
+  $('#measbar').hidden = tool !== 'measure';
+  measKey = '';
+  if (tool === 'measure') { buildMeasBar(); hint('Touchez le 1er point (mur, coin…), puis le 2e. Saisissez la cote pour ajuster.', 6000); }
   if (tool === 'wall') buildDraftBar();
   if (tool === 'opening') buildKindBar();
   if (tool === 'wall') hint('Touchez pour poser le 1er point · glissez pour ajuster avant de relâcher');
@@ -385,6 +390,37 @@ function onDraft(d) {
 
 // ───────────────────────── barre « ouverture » ─────────────────────────
 
+const measPrefs = { move: 'b' };
+let measKey = '';
+function buildMeasBar() {
+  const bar = $('#measbar');
+  if (editor?.tool !== 'measure') return;
+  const info = editor.measInfo();
+  const key = info ? `${editor.meas.A.x},${editor.meas.A.y},${editor.meas.B.x},${editor.meas.B.y}:${info.locked}:${info.lockable}` : 'none';
+  if (key === measKey) return;
+  measKey = key;
+  bar.innerHTML = '';
+  if (!info) {
+    bar.append(h('p', { class: 'note' }, editor.meas?.A ? 'Touchez le 2e point.' : 'Touchez le 1er point : face de mur, coin ou axe.'));
+    return;
+  }
+  const input = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', 'aria-label': 'Cote' });
+  input.value = G.fmtCm(info.len);
+  input.addEventListener('focus', () => setTimeout(() => input.select(), 0));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  input.addEventListener('change', () => {
+    const v = G.parseLen(input.value);
+    if (Number.isFinite(v) && v >= 1) { if (!editor.applyMeasure(v, measPrefs.move)) input.value = G.fmtCm(info.len); } else input.value = G.fmtCm(info.len);
+  });
+  bar.append(
+    h('div', { class: 'row tight' }, h('label', {}, 'Cote (cm)', input),
+      h('button', { class: 'chip' + (info.locked ? ' on' : ''), onclick: () => editor.toggleMeasureLock() }, info.locked ? '🔒 Verrouillée' : info.lockable ? '🔓 Verrouiller' : '🔓 Libre'),
+      h('button', { class: 'chip', onclick: () => editor.resetMeasure() }, 'Nouvelle')),
+    h('div', { class: 'row tight' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
+    info.lockable ? null : h('p', { class: 'note' }, 'Points libres : la cote règle la distance mais ne peut pas être verrouillée.'),
+  );
+}
+
 function buildKindBar() {
   const bar = $('#kindbar');
   bar.innerHTML = '';
@@ -421,7 +457,7 @@ function refreshPanel(force = false) {
   const o = editor?.selected;
   if (!sel || !o || editor.tool === 'wall') { panel.hidden = true; panel.innerHTML = ''; panelKey = ''; panelSync = []; return; }
   const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '')
-    + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) : '');
+    + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) + ':' + (editor.measure()?.locked ? 1 : 0) + (editor.measure()?.chainLocked ? 1 : 0) : '');
   if (force || key !== panelKey) {
     panelKey = key; panelSync = [];
     panel.innerHTML = '';
@@ -510,7 +546,10 @@ function wallPanel() {
     h('div', { class: 'row fields' },
       field(multi ? 'Ce segment' : 'Longueur', () => m().len, apply, { min: 5 }),
       multi ? field('Mur entier', () => m().total, applyChain, { min: 5 }) : null),
-    h('p', { class: 'note' }, textBind(() => `Mesure ${face.nodeValue}.`)),
+    h('div', { class: 'row' },
+      h('button', { class: 'chip' + (m()?.locked ? ' on' : ''), onclick: () => { editor.toggleLock('wall', m().len); refreshPanel(true); } }, m()?.locked ? '🔒 Segment verrouillé' : '🔓 Verrouiller le segment'),
+      multi ? h('button', { class: 'chip' + (m()?.chainLocked ? ' on' : ''), onclick: () => { editor.toggleLock('chain', m().total); refreshPanel(true); } }, m()?.chainLocked ? '🔒 Mur entier verrouillé' : '🔓 Verrouiller le mur entier') : null),
+    h('p', { class: 'note' }, textBind(() => `Mesure ${face.nodeValue}. Une cote saisie est verrouillée automatiquement.`)),
     distSeg, segList,
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Garder fixe :'), fixSeg),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Correction :'), seg([['stretch', 'Étirer la pièce'], ['point', 'Ce point seul']], () => prefs.wallMode, (v) => { prefs.wallMode = v; })),

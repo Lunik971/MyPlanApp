@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -288,4 +288,45 @@ test('mode axe : une seule étiquette par mur, au milieu', () => {
   const labels = dimLabels(p, computeLayout(p), 'axis');
   assert.equal(labels.length, p.walls.length);
   assert.ok(labels.every((l) => l.side === 0));
+});
+
+// ── outil Mesure & cotes verrouillées ──
+test('mesure entre deux faces intérieures : la cote saisie décale le mur du bout', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const A = { x: 10, y: 150 }, B = { x: 590, y: 150 };
+  assert.ok(adjustMeasure(p, A, B, 500, { move: 'b' }));
+  const xs = Object.values(p.nodes).map((n) => n.x);
+  assert.equal(Math.max(...xs), 520);
+  assert.equal(Math.min(...xs), 0);
+  assert.ok(Math.abs(computeLayout(p).rooms[0].area - 500 * 280) < 5);
+});
+
+test('mesure : côté du 1er point', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  assert.ok(adjustMeasure(p, { x: 10, y: 150 }, { x: 590, y: 150 }, 500, { move: 'a' }));
+  const xs = Object.values(p.nodes).map((n) => n.x);
+  assert.equal(Math.min(...xs), 80);
+  assert.equal(Math.max(...xs), 600);
+});
+
+test('cote verrouillée : une autre correction qui la change est détectée', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const wa = p.walls.find((w) => p.nodes[w.a].x === 0 && p.nodes[w.b].x === 0).id;
+  const wb = p.walls.find((w) => p.nodes[w.a].x === 600 && p.nodes[w.b].x === 600).id;
+  const spec = gapSpec(p, { x: 10, y: 150, walls: [wa] }, { x: 590, y: 150, walls: [wb] });
+  assert.ok(spec);
+  assert.ok(Math.abs(spec.len - 580) < 0.01);
+  upsertLock(p, spec);
+  assert.ok(findLock(p, spec));
+  const prev = normalizePlan(JSON.parse(JSON.stringify(p)));
+  const top = p.walls.find((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  setWallLength(p, top.id, 700, { fixed: p.nodes[top.a].x === 0 ? 'a' : 'b' });
+  assert.ok(brokenLocks(prev, p), 'élargir la pièce doit casser la cote verrouillée');
+  const prev2 = normalizePlan(JSON.parse(JSON.stringify(prev)));
+  const side = prev2.walls.find((w) => prev2.nodes[w.a].x === 0 && prev2.nodes[w.b].x === 0);
+  setWallLength(prev2, side.id, 400, { fixed: prev2.nodes[side.a].y === 0 ? 'a' : 'b' });
+  assert.equal(brokenLocks(prev, prev2), null, 'allonger dans l’autre sens ne touche pas la cote');
 });

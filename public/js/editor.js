@@ -24,6 +24,7 @@ export class Editor {
     this.openingKind = 'door';
     this.sel = null;
     this.draft = null;
+    this.meas = null;
     this.ghost = null;
     this.mergeMark = null;
     this.undoStack = [];
@@ -91,6 +92,45 @@ export class Editor {
   mutate(fn) {
     this.snapshot();
     fn(this.plan);
+    if (!this.guardLocks()) return;
+    this.afterChange();
+  }
+
+  // Refuse (et annule) une modification qui ferait changer une cote verrouillée
+  guardLocks(ignoreId) {
+    const prevJson = this.undoStack.at(-1);
+    if (!prevJson || !this.plan.locks?.length) return true;
+    const prev = G.normalizePlan(JSON.parse(prevJson));
+    const bad = G.brokenLocks(prev, this.plan, ignoreId);
+    if (!bad) return true;
+    this.undoStack.pop();
+    this.plan = prev;
+    this.afterChange();
+    this.hooks.history?.();
+    this.hooks.toast?.(`🔒 Cote verrouillée (${G.fmtLen(bad.len)}) : déverrouillez-la pour la modifier`);
+    return false;
+  }
+
+  lockSpec(kind) {
+    const w = this.selected;
+    if (!w) return null;
+    const ref = this.dimRef;
+    const r = G.resolveSide(this.plan, this.layout, w.id, this.sel.side || 1, ref);
+    return { kind, wall: w.id, side: r.side, ref, side0: r.side };
+  }
+
+  isLocked(kind) {
+    const sp = this.lockSpec(kind);
+    return !!(sp && G.findLock(this.plan, sp));
+  }
+
+  toggleLock(kind, len) {
+    const sp = this.lockSpec(kind);
+    if (!sp) return;
+    const ex = G.findLock(this.plan, sp);
+    this.snapshot();
+    if (ex) G.removeLock(this.plan, ex.id);
+    else G.upsertLock(this.plan, { kind: sp.kind, wall: sp.wall, side: sp.side, ref: sp.ref, len });
     this.afterChange();
   }
 
@@ -147,6 +187,8 @@ export class Editor {
   setTool(tool) {
     this.tool = tool;
     this.draft = tool === 'wall' ? { last: null, first: null, preview: null, guides: [], count: 0 } : null;
+    this.meas = tool === 'measure' ? { A: null, B: null, preview: null } : null;
+    this.hooks.meas?.(this.meas);
     this.ghost = null;
     if (tool !== 'select') this.select(null);
     this.hooks.tool?.(tool);
@@ -357,6 +399,7 @@ export class Editor {
       len: r.entry ? r.entry.len : wi.len, axisLen: wi.len,
       segs: cm.lens, total: cm.total, index: cm.ch.index, count: cm.ch.segments.length,
       canSwitch: !!(r.entry && other && other.kind === r.entry.kind),
+      locked: this.isLocked('wall'), chainLocked: this.isLocked('chain'),
     };
   }
 
@@ -426,6 +469,9 @@ export class Editor {
     } else if (this.tool === 'wall') {
       g.kind = 'wallPlace';
       this.updatePreview(sp);
+    } else if (this.tool === 'measure') {
+      g.kind = 'measPlace';
+      this.updateMeasPreview(sp);
     } else if (this.tool === 'opening') {
       g.kind = 'openingPlace';
       this.updateGhost(sp);
@@ -451,6 +497,7 @@ export class Editor {
         break;
       case 'wallPlace': this.updatePreview(sp); break;
       case 'openingPlace': this.updateGhost(sp); break;
+      case 'measPlace': this.updateMeasPreview(sp); break;
       case 'dragFurniture': {
         if (!g.moved) break;
         if (!g.snap) { this.snapshot(); g.snap = true; }
@@ -548,14 +595,16 @@ export class Editor {
         } else {
           if (g.mergeWith && plan.nodes[g.mergeWith]) G.mergeNodes(plan, g.mergeWith, g.node);
           this.mergeMark = null;
+          if (!this.guardLocks()) break;
           this.afterChange();
         }
         break;
       case 'dragWall': case 'dragFurniture': case 'dragOpening': case 'rotate':
-        if (g.snap) this.afterChange();
+        if (g.snap && this.guardLocks()) this.afterChange();
         break;
       case 'wallPlace': this.commitPoint(); break;
       case 'openingPlace': this.placeOpening(sp); break;
+      case 'measPlace': this.commitMeasPoint(); break;
       default: break;
     }
     this.draw();
@@ -595,6 +644,121 @@ export class Editor {
     const pm = { x: (pn.mid0.x - pn.view0.ox) / pn.view0.s, y: (pn.mid0.y - pn.view0.oy) / pn.view0.s };
     this.view = { s, ox: mid.x - pm.x * s, oy: mid.y - pm.y * s };
     this.draw();
+  }
+
+  // ───────── outil Mesure ─────────
+
+  // Accroche : coins de faces, nœuds, faces de murs (et axe), sinon point libre.
+  measSnap(sp) {
+    const S = this.view.s, p = this.toPlan(sp), plan = this.plan;
+    const wallsAt = (P) => plan.walls.filter((w) => {
+      const a = plan.nodes[w.a], b = plan.nodes[w.b];
+      return a && b && G.projectToSegment(P, a, b).d <= w.t / 2 + 0.6;
+    }).map((w) => w.id);
+    let best = null, bd = 14 / S;
+    for (const e of this.layout.sides.values()) {
+      const d = G.dist(e.p0, p);
+      if (d < bd) { bd = d; best = { x: e.p0.x, y: e.p0.y }; }
+    }
+    if (!best) {
+      for (const n of Object.values(plan.nodes)) {
+        const d = G.dist(n, p);
+        if (d < bd) { bd = d; best = { x: n.x, y: n.y }; }
+      }
+    }
+    if (best) return { x: G.round1(best.x), y: G.round1(best.y), walls: wallsAt(best), kind: 'corner' };
+    let cand = null, cd = 10 / S;
+    for (const w of plan.walls) {
+      const a = plan.nodes[w.a], b = plan.nodes[w.b];
+      const pr = G.projectToSegment(p, a, b);
+      const wi = G.wallInfo(plan, w);
+      const sg = (p.x - pr.x) * wi.nx + (p.y - pr.y) * wi.ny >= 0 ? 1 : -1;
+      for (const off of [w.t / 2, 0]) {
+        const d = Math.abs(pr.d - off) + (off === 0 ? 3 / S : 0);
+        if (d < cd) { cd = d; cand = { x: pr.x + wi.nx * sg * off, y: pr.y + wi.ny * sg * off, walls: [w.id], kind: off ? 'face' : 'axis', wall: w }; }
+      }
+    }
+    if (cand) return { x: G.round1(cand.x), y: G.round1(cand.y), walls: cand.walls, kind: cand.kind };
+    return { x: G.round1(p.x), y: G.round1(p.y), walls: [], kind: 'free' };
+  }
+
+  // Entre deux murs parallèles : mesure perpendiculaire, plus facile à viser
+  measAlign(A, s) {
+    if (s.walls.length !== 1 || !A.walls?.length || s.kind === 'corner') return s;
+    const wb = this.plan.walls.find((q) => q.id === s.walls[0]);
+    const ub = G.wallInfo(this.plan, wb);
+    for (const id of A.walls) {
+      if (id === wb.id) continue;
+      const wa = this.plan.walls.find((q) => q.id === id);
+      const ua = G.wallInfo(this.plan, wa);
+      if (Math.abs(ua.nx * ub.ny - ua.ny * ub.nx) < 0.02) {
+        const k = (s.x - A.x) * ua.nx + (s.y - A.y) * ua.ny;
+        return { ...s, x: G.round1(A.x + ua.nx * k), y: G.round1(A.y + ua.ny * k) };
+      }
+    }
+    return s;
+  }
+
+  updateMeasPreview(sp) {
+    const m = this.meas;
+    if (!m) return;
+    let s = this.measSnap(sp);
+    if (m.A && !m.B) s = this.measAlign(m.A, s);
+    m.preview = s;
+    this.draw();
+  }
+
+  commitMeasPoint() {
+    const m = this.meas, pv = m?.preview;
+    if (!pv) return;
+    if (!m.A || m.B) { m.A = pv; m.B = null; }
+    else { if (G.dist(m.A, pv) < 1) return; m.B = pv; }
+    m.preview = null;
+    this.hooks.meas?.(m);
+    this.draw();
+  }
+
+  measInfo() {
+    const m = this.meas;
+    if (!m?.B) return null;
+    const spec = G.gapSpec(this.plan, m.A, m.B);
+    return { len: G.dist(m.A, m.B), lockable: !!spec, locked: !!(spec && G.findLock(this.plan, spec)) };
+  }
+
+  resetMeasure() {
+    if (!this.meas) return;
+    this.meas = { A: null, B: null, preview: null };
+    this.hooks.meas?.(this.meas);
+    this.draw();
+  }
+
+  toggleMeasureLock() {
+    const m = this.meas;
+    const spec = m?.B && G.gapSpec(this.plan, m.A, m.B);
+    if (!spec) { this.hooks.toast?.('Posez les deux points sur des murs parallèles pour verrouiller'); return; }
+    const ex = G.findLock(this.plan, spec);
+    this.snapshot();
+    if (ex) G.removeLock(this.plan, ex.id); else G.upsertLock(this.plan, spec);
+    this.afterChange();
+    this.hooks.meas?.(m);
+  }
+
+  // Saisie de la cote : décale ce qui est au-delà de B (ou en deçà de A), puis verrouille
+  applyMeasure(len, move = 'b') {
+    const m = this.meas;
+    if (!m?.B || !(len >= 1)) return false;
+    const spec = G.gapSpec(this.plan, m.A, m.B);
+    const ex = spec && G.findLock(this.plan, spec);
+    const L = G.dist(m.A, m.B), dx = (m.B.x - m.A.x) / L, dy = (m.B.y - m.A.y) / L;
+    this.snapshot();
+    if (!G.adjustMeasure(this.plan, m.A, m.B, len, { move })) { this.undoStack.pop(); return false; }
+    if (!this.guardLocks(ex?.id)) return false;
+    if (move === 'a') m.A = { ...m.A, x: G.round1(m.B.x - dx * len), y: G.round1(m.B.y - dy * len) };
+    else m.B = { ...m.B, x: G.round1(m.A.x + dx * len), y: G.round1(m.A.y + dy * len) };
+    if (spec) G.upsertLock(this.plan, { ...spec, len }); // une cote saisie est verrouillée
+    this.afterChange();
+    this.hooks.meas?.(m);
+    return true;
   }
 
   // ───────── tracé de murs ─────────
@@ -699,9 +863,12 @@ export class Editor {
     const ok = r.entry
       ? G.setWallFaceLength(this.plan, this.sel.id, r.side, len, opts)
       : G.setWallLength(this.plan, this.sel.id, len, opts);
-    if (!ok) this.undoStack.pop();
+    if (!ok) { this.undoStack.pop(); this.afterChange(); return false; }
+    const spec = { kind: 'wall', wall: this.sel.id, side: r.side, ref: this.dimRef, len };
+    if (!this.guardLocks(G.findLock(this.plan, spec)?.id)) return false;
+    G.upsertLock(this.plan, spec); // une cote saisie est verrouillée
     this.afterChange();
-    return ok;
+    return true;
   }
 
   // Longueur totale du mur entier (tous les segments alignés), dans la même référence
@@ -712,9 +879,12 @@ export class Editor {
     const ok = r.entry
       ? G.setChainFaceLength(this.plan, this.sel.id, r.side, total, opts)
       : G.setChainLength(this.plan, this.sel.id, total, opts);
-    if (!ok) this.undoStack.pop();
+    if (!ok) { this.undoStack.pop(); this.afterChange(); return false; }
+    const spec = { kind: 'chain', wall: this.sel.id, side: r.side, ref: this.dimRef, len: total };
+    if (!this.guardLocks(G.findLock(this.plan, spec)?.id)) return false;
+    G.upsertLock(this.plan, spec);
     this.afterChange();
-    return ok;
+    return true;
   }
 
   setWallThickness(t) {
@@ -817,6 +987,8 @@ export class Editor {
       layout: this.layout,
       dimRef: this.dimRef,
       dimDelta: this.dimDelta(),
+      meas: this.tool === 'measure' ? this.meas : null,
+      isLocked: (wall, side) => (this.plan.locks || []).some((l) => (l.kind === 'wall' || l.kind === 'chain') && l.wall === wall && l.side === side && l.ref === this.dimRef) || false,
     });
   }
 

@@ -288,7 +288,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
     for (const l of labels) {
       if (l.len * S < 38) continue;
       const hot = sel?.type === 'wall' && sel.id === l.wall && l.side === selSide;
-      const txt = fmtLen(l.len);
+      const txt = (o.isLocked?.(l.wall, l.side) ? '🔒 ' : '') + fmtLen(l.len);
       if (hot) pill(ctx, txt, X(l.x), Y(l.y), { fg: '#fff', bg: BLUE, border: BLUE });
       else haloText(ctx, txt, X(l.x), Y(l.y));
     }
@@ -333,6 +333,28 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
       [[-h, -th], [h, -th], [h, th], [-h, th]].forEach(([a, b], i) => { const p = P(a, b); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
       ctx.closePath(); ctx.fillStyle = 'rgba(37,99,235,.25)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = BLUE; ctx.stroke();
     }
+  }
+
+  // outil Mesure
+  const ms = o.meas;
+  if (ms) {
+    const pts = [ms.A, ms.B || ms.preview].filter(Boolean);
+    if (ms.A && !ms.B && !ms.preview) pts.length = 1;
+    const mark = (P, c) => { ctx.beginPath(); ctx.arc(X(P.x), Y(P.y), 5, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); };
+    if (pts.length === 2) {
+      const [P, Q] = pts;
+      const dxs = X(Q.x) - X(P.x), dys = Y(Q.y) - Y(P.y), ls = Math.hypot(dxs, dys) || 1;
+      const nx = -dys / ls * 6, ny = dxs / ls * 6;
+      ctx.beginPath(); ctx.setLineDash(ms.B ? [] : [6, 5]); ctx.lineWidth = 1.6; ctx.strokeStyle = BLUE;
+      ctx.moveTo(X(P.x), Y(P.y)); ctx.lineTo(X(Q.x), Y(Q.y));
+      ctx.moveTo(X(P.x) - nx, Y(P.y) - ny); ctx.lineTo(X(P.x) + nx, Y(P.y) + ny);
+      ctx.moveTo(X(Q.x) - nx, Y(Q.y) - ny); ctx.lineTo(X(Q.x) + nx, Y(Q.y) + ny);
+      ctx.stroke(); ctx.setLineDash([]);
+      const dd = Math.hypot(Q.x - P.x, Q.y - P.y);
+      pill(ctx, fmtLen(dd), (X(P.x) + X(Q.x)) / 2 + nx * 2.2, (Y(P.y) + Y(Q.y)) / 2 + ny * 2.2, { fg: '#fff', bg: BLUE, border: BLUE });
+      mark(P, BLUE); mark(Q, ms.B ? BLUE : '#93b4f5');
+    } else if (pts.length === 1) mark(pts[0], BLUE);
+    if (!ms.B && ms.preview && !ms.A) mark(ms.preview, '#93b4f5');
   }
 
   // tracé en cours

@@ -58,3 +58,8 @@ Calque photo/PDF d'un plan existant à mettre à l'échelle, OIDC (Authentik), p
 
 - **Référence des cotes** : intérieur (défaut), extérieur ou axe. Réglable dans le panneau d'un mur ("Cotes :") ou dans Réglages du plan. Les chiffres affichés, les longueurs saisies (y compris pendant le tracé) suivent cette référence. « ⇄ Autre côté » mesure l'autre face du mur (ex. pièce voisine).
 - **Mur entier** : quand un mur est coupé par des cloisons, le panneau propose « Ce segment » (cote de la pièce) et « Mur entier » (longueur totale). Le mode de répartition (ce segment / au bout / réparti) choisit quel segment absorbe la différence.
+
+## Outil Mesure et cotes verrouillées
+
+- **Mesure** : touchez deux points (face de mur, coin, axe). Entre deux murs parallèles, la mesure est perpendiculaire. Saisissez la cote : tout ce qui est au-delà du 2e point (ou en deçà du 1er, au choix) se décale pour l'obtenir.
+- **Verrouillage** : une cote saisie (panneau du mur, mur entier ou outil Mesure) est verrouillée par défaut (🔒 affiché sur le plan). Une modification qui la ferait changer est refusée et annulée ; déverrouillez-la d'abord. Retaper une cote verrouillée la met à jour.

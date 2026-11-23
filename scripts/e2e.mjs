@@ -115,6 +115,34 @@ try {
   ok(JSON.stringify(before) !== JSON.stringify(after), `les surfaces suivent la correction (${before} → ${after})`);
   await page.screenshot({ path: `${shots}/2-mur.png` });
 
+  console.log('Cotes verrouillées & outil Mesure');
+  const locks0 = await ev(() => window.__app.editor.plan.locks.length);
+  ok(locks0 >= 1, `la cote saisie est verrouillée par défaut (${locks0})`);
+  await page.click('[data-tool=measure]');
+  await refit();
+  const bb = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return { x0: Math.min(...ns.map((n) => n.x)), y0: Math.min(...ns.map((n) => n.y)), y1: Math.max(...ns.map((n) => n.y)) }; });
+  await tapPlan(bb.x0 + 60, bb.y0 + 5);
+  await tapPlan(bb.x0 + 60, bb.y1 - 5);
+  await page.waitForSelector('#measbar input');
+  const mv = Number((await page.inputValue('#measbar input')).replace(',', '.'));
+  ok(Math.abs(mv - (bb.y1 - bb.y0 - 10)) < 1, `mesure intérieure entre les deux murs (${mv} cm)`);
+  await page.fill('#measbar input', String(mv - 50));
+  await page.press('#measbar input', 'Enter');
+  const bb2 = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return { h: Math.max(...ns.map((n) => n.y)) - Math.min(...ns.map((n) => n.y)), locks: window.__app.editor.plan.locks.filter((l) => l.kind === 'gap').length }; });
+  ok(Math.abs(bb2.h - (bb.y1 - bb.y0 - 50)) < 1, `la cote saisie décale le mur du fond (${bb2.h})`);
+  ok(bb2.locks === 1, 'la mesure saisie est verrouillée');
+  const refused = await ev(() => {
+    const e = window.__app.editor; e.setTool('select');
+    const mx = Math.min(...Object.values(e.plan.nodes).map((n) => n.x));
+    const w = e.plan.walls.find((q) => e.plan.nodes[q.a].x === mx && e.plan.nodes[q.b].x === mx);
+    e.select({ type: 'wall', id: w.id, side: 1 });
+    const before = JSON.stringify(e.plan.nodes);
+    const wi = Math.hypot(e.plan.nodes[w.a].x - e.plan.nodes[w.b].x, e.plan.nodes[w.a].y - e.plan.nodes[w.b].y);
+    const r = e.applyWallLength(wi + 100, { fixed: e.plan.nodes[w.a].y <= e.plan.nodes[w.b].y ? 'a' : 'b', mode: 'stretch' });
+    return { r, same: before === JSON.stringify(e.plan.nodes) };
+  });
+  ok(refused.r === false && refused.same, 'une modification qui casse une cote verrouillée est refusée');
+
   console.log('Nom de pièce & meuble');
   await refit();
   await tapPlan(120, 200);

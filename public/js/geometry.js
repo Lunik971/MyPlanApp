@@ -26,6 +26,7 @@ export function emptyPlan() {
     openings: [],
     rooms: [],
     furniture: [],
+    locks: [],
     settings: { wallT: 10, grid: 10, dims: true, dimRef: 'inner' },
   };
 }
@@ -34,7 +35,7 @@ export function normalizePlan(p) {
   const b = emptyPlan();
   const q = { ...b, ...(p || {}) };
   q.nodes = q.nodes || {};
-  for (const k of ['walls', 'openings', 'rooms', 'furniture']) if (!Array.isArray(q[k])) q[k] = [];
+  for (const k of ['walls', 'openings', 'rooms', 'furniture', 'locks']) if (!Array.isArray(q[k])) q[k] = [];
   q.settings = { ...b.settings, ...(q.settings || {}) };
   return q;
 }
@@ -754,4 +755,104 @@ export function pointInFurniture(p, f) {
   const lx = dx * c - dy * s, ly = dx * s + dy * c;
   if (f.shape === 'round') return (lx / (f.w / 2)) ** 2 + (ly / (f.d / 2)) ** 2 <= 1;
   return Math.abs(lx) <= f.w / 2 && Math.abs(ly) <= f.d / 2;
+}
+
+
+// ───────────────────────── cotes verrouillées ─────────────────────────
+// Une cote saisie est verrouillée : une autre modification ne peut pas la faire changer.
+//  {kind:'wall',  wall, side, ref, len}   longueur d'une face (ou de l'axe) d'un segment
+//  {kind:'chain', wall, side, ref, len}   longueur totale d'un mur entier
+//  {kind:'gap',   wa, wb, dx, dy, sa, sb, len}   écart entre deux murs parallèles (outil Mesure)
+
+export function lockValue(plan, layout, lk) {
+  if (lk.kind === 'gap') {
+    const wa = plan.walls.find((q) => q.id === lk.wa), wb = plan.walls.find((q) => q.id === lk.wb);
+    const A = wa && plan.nodes[wa.a], B = wb && plan.nodes[wb.a];
+    if (!A || !B) return null;
+    return (B.x * lk.dx + B.y * lk.dy + lk.sb) - (A.x * lk.dx + A.y * lk.dy + lk.sa);
+  }
+  const w = plan.walls.find((q) => q.id === lk.wall);
+  if (!w) return null;
+  if (lk.kind === 'chain') { const m = chainMeasure(plan, layout, lk.wall, lk.side); return m ? m.total : null; }
+  if (!lk.side) return wallInfo(plan, w).len;
+  const e = sideEntry(plan, layout, lk.wall, lk.side);
+  return e ? e.len : wallInfo(plan, w).len;
+}
+
+export function findLock(plan, spec) {
+  return (plan.locks || []).find((l) => l.kind === spec.kind && (spec.kind === 'gap'
+    ? (l.wa === spec.wa && l.wb === spec.wb) || (l.wa === spec.wb && l.wb === spec.wa)
+    : l.wall === spec.wall && l.side === spec.side && l.ref === spec.ref)) || null;
+}
+
+export function upsertLock(plan, spec) {
+  plan.locks ||= [];
+  const l = findLock(plan, spec);
+  if (l) { Object.assign(l, spec, { id: l.id }); return l; }
+  const n = { id: uid('k'), ...spec };
+  plan.locks.push(n);
+  return n;
+}
+
+export function removeLock(plan, id) {
+  plan.locks = (plan.locks || []).filter((l) => l.id !== id);
+}
+
+// Première cote verrouillée qui était respectée dans `prev` et ne l'est plus dans `plan`.
+export function brokenLocks(prev, plan, ignoreId) {
+  if (!plan.locks?.length) return null;
+  const lp = computeLayout(prev), ln = computeLayout(plan);
+  for (const lk of plan.locks) {
+    if (lk.id === ignoreId) continue;
+    const before = lockValue(prev, lp, lk);
+    if (before == null || Math.abs(before - lk.len) > 0.5) continue;
+    const now = lockValue(plan, ln, lk);
+    if (now == null || Math.abs(now - lk.len) > 0.5) return lk;
+  }
+  return null;
+}
+
+// Verrou d'une mesure entre deux points posés sur des murs parallèles (sinon null)
+export function gapSpec(plan, A, B) {
+  const L = dist(A, B);
+  if (L < 1 || !A.walls?.length || !B.walls?.length) return null;
+  const dx = (B.x - A.x) / L, dy = (B.y - A.y) / L;
+  const perp = (id) => {
+    const w = plan.walls.find((q) => q.id === id);
+    if (!w) return false;
+    const a = plan.nodes[w.a], b = plan.nodes[w.b], l = dist(a, b) || 1;
+    return Math.abs(((b.x - a.x) * dx + (b.y - a.y) * dy) / l) < 0.02;
+  };
+  const wa = A.walls.find(perp), wb = B.walls.find((id) => perp(id) && id !== wa);
+  if (!wa || !wb) return null;
+  const na = plan.nodes[plan.walls.find((q) => q.id === wa).a], nb = plan.nodes[plan.walls.find((q) => q.id === wb).a];
+  return {
+    kind: 'gap', wa, wb, dx, dy,
+    sa: (A.x - na.x) * dx + (A.y - na.y) * dy, sb: (B.x - nb.x) * dx + (B.y - nb.y) * dy, len: L,
+  };
+}
+
+// Outil Mesure : règle la distance entre deux points en décalant tout ce qui se trouve
+// au-delà du point B (move:'b') ou en deçà du point A (move:'a').
+export function adjustMeasure(plan, A, B, newLen, { move = 'b' } = {}) {
+  const L = dist(A, B);
+  if (L < 1e-6 || !(newLen >= 1)) return false;
+  const dx = (B.x - A.x) / L, dy = (B.y - A.y) / L, delta = newLen - L;
+  const tol = (P) => {
+    let t = 0;
+    for (const w of plan.walls) {
+      const a = plan.nodes[w.a], b = plan.nodes[w.b];
+      if (a && b && projectToSegment(P, a, b).d <= w.t / 2 + 0.6) t = Math.max(t, w.t / 2);
+    }
+    return t;
+  };
+  const pr = (o) => o.x * dx + o.y * dy;
+  const fwd = move !== 'a';
+  const limit = fwd ? pr(B) - tol(B) - 0.5 : pr(A) + tol(A) + 0.5;
+  const k = fwd ? delta : -delta;
+  const hit = (o) => (fwd ? pr(o) >= limit : pr(o) <= limit);
+  for (const o of [...Object.values(plan.nodes), ...plan.furniture, ...plan.rooms]) {
+    if (hit(o)) { o.x = round1(o.x + dx * k); o.y = round1(o.y + dy * k); }
+  }
+  return true;
 }
