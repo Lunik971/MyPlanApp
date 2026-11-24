@@ -220,7 +220,7 @@ let panelKey = '', panelSync = [];
 function ensureEditor() {
   if (editor) return;
   editor = new Editor($('#cv'), {
-    change: onChange, select: onSelect, draft: onDraft, meas: () => buildMeasBar(), tool: onTool, history: updateHistory, toast, live: onLive,
+    change: onChange, select: onSelect, draft: onDraft, meas: () => buildMeasBar(), tool: onTool, history: updateHistory, toast, live: onLive, blocked: onBlocked,
   });
   // la vue utile s'arrête au-dessus du panneau d'outils (barre de tracé, panneau de sélection…)
   const dock = $('#dock');
@@ -712,6 +712,16 @@ async function exportImage() {
   if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: state.plan.name }); return; } catch (e) { if (e.name === 'AbortError') return; } }
   const a = h('a', { href: URL.createObjectURL(blob), download: fname });
   document.body.append(a); a.click(); a.remove();
+}
+
+// Une modification est bloquée par une cote verrouillée : proposer de la déverrouiller
+function onBlocked({ lock, label, retry }) {
+  if (!retry) { toast(`🔒 ${label} verrouillée : déverrouillez-la d’abord`); return; }
+  const sh = openSheet('Cote verrouillée', h('div', {},
+    h('p', {}, `Cette modification changerait la cote verrouillée « ${label} ».`),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn primary', onclick: () => { sh.close(); editor.removeLockById(lock.id); markDirty(); retry(); refreshPanel(true); } }, '🔓 Déverrouiller et appliquer'),
+      h('button', { class: 'btn', onclick: () => { sh.close(); refreshPanel(true); } }, 'Annuler'))));
 }
 
 function locksSheet() {

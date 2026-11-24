@@ -150,6 +150,11 @@ try {
     return { r, same: before === JSON.stringify(e.plan.nodes) };
   });
   ok(refused.r === false && refused.same, 'une modification qui casse une cote verrouillée est refusée');
+  await page.waitForSelector('text=Déverrouiller et appliquer');
+  const h0 = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return Math.max(...ns.map((n) => n.y)) - Math.min(...ns.map((n) => n.y)); });
+  await page.click('text=Déverrouiller et appliquer');
+  const h1 = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return Math.max(...ns.map((n) => n.y)) - Math.min(...ns.map((n) => n.y)); });
+  ok(h1 - h0 >= 99.4 && h1 - h0 <= 110.6, `« Déverrouiller et appliquer » applique la modification (${h0} → ${h1})`);
 
   await page.click('#btn-menu');
   await page.click('text=Cotes verrouillées');

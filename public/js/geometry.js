@@ -812,11 +812,12 @@ export function removeLock(plan, id) {
 }
 
 // Première cote verrouillée qui était respectée dans `prev` et ne l'est plus dans `plan`.
-export function brokenLocks(prev, plan, ignoreId) {
+export function brokenLocks(prev, plan, ignore) {
+  const ignoreIds = ignore instanceof Set ? ignore : new Set([].concat(ignore || []));
   if (!plan.locks?.length) return null;
   const lp = computeLayout(prev), ln = computeLayout(plan);
   for (const lk of plan.locks) {
-    if (lk.id === ignoreId) continue;
+    if (ignoreIds.has(lk.id)) continue;
     const before = lockValue(prev, lp, lk);
     if (before == null || Math.abs(before - lk.len) > 0.5) continue;
     const now = lockValue(plan, ln, lk);

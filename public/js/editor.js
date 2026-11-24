@@ -97,17 +97,24 @@ export class Editor {
   }
 
   // Refuse (et annule) une modification qui ferait changer une cote verrouillée
-  guardLocks(ignoreId) {
+  describeLock(lk) {
+    const nm = lk.kind === 'measure' ? 'Mesure' : lk.kind === 'chain' ? 'Mur entier' : 'Mur';
+    return `${nm} ${G.fmtLen(lk.len)}`;
+  }
+
+  guardLocks(ignore, retry) {
+    const ignoreIds = new Set([].concat(ignore || []));
     const prevJson = this.undoStack.at(-1);
     if (!prevJson || !this.plan.locks?.length) return true;
     const prev = G.normalizePlan(JSON.parse(prevJson));
-    const bad = G.brokenLocks(prev, this.plan, ignoreId);
+    const bad = G.brokenLocks(prev, this.plan, ignoreIds);
     if (!bad) return true;
     this.undoStack.pop();
     this.plan = prev;
     this.afterChange();
     this.hooks.history?.();
-    this.hooks.toast?.(`🔒 Cote verrouillée (${G.fmtLen(bad.len)}) : déverrouillez-la pour la modifier`);
+    if (this.hooks.blocked) this.hooks.blocked({ lock: bad, label: this.describeLock(bad), retry });
+    else this.hooks.toast?.(`🔒 Cote verrouillée (${G.fmtLen(bad.len)}) : déverrouillez-la pour la modifier`);
     return false;
   }
 
@@ -791,7 +798,7 @@ export class Editor {
     const ex = G.findLock(this.plan, { kind: 'measure', measure: mm.id });
     this.snapshot();
     if (!G.adjustMeasure(this.plan, e.A, e.B, len, { move })) { this.undoStack.pop(); return false; }
-    if (!this.guardLocks(ex?.id)) return false;
+    if (!this.guardLocks(ex?.id, () => this.applySelectedMeasure(len, move))) return false;
     G.upsertLock(this.plan, { kind: 'measure', measure: mm.id, len });
     this.afterChange();
     return true;
@@ -818,7 +825,7 @@ export class Editor {
     const L = G.dist(m.A, m.B), dx = (m.B.x - m.A.x) / L, dy = (m.B.y - m.A.y) / L;
     this.snapshot();
     if (!G.adjustMeasure(this.plan, m.A, m.B, len, { move })) { this.undoStack.pop(); return false; }
-    if (!this.guardLocks(ex?.id)) return false;
+    if (!this.guardLocks(ex?.id, () => this.applyMeasure(len, move))) return false;
     if (move === 'a') m.A = { ...m.A, x: G.round1(m.B.x - dx * len), y: G.round1(m.B.y - dy * len) };
     else m.B = { ...m.B, x: G.round1(m.A.x + dx * len), y: G.round1(m.A.y + dy * len) };
     if (spec) G.upsertLock(this.plan, { ...spec, len }); // une cote saisie est verrouillée
@@ -931,7 +938,10 @@ export class Editor {
       : G.setWallLength(this.plan, this.sel.id, len, opts);
     if (!ok) { this.undoStack.pop(); this.afterChange(); return false; }
     const spec = { kind: 'wall', wall: this.sel.id, side: r.side, ref: this.dimRef, len };
-    if (!this.guardLocks(G.findLock(this.plan, spec)?.id)) return false;
+    // les autres cotes verrouillées de ce même segment (autre face / référence) portent sur la même longueur : remplacées
+    const same = (this.plan.locks || []).filter((l) => l.kind === 'wall' && l.wall === this.sel.id).map((l) => l.id);
+    if (!this.guardLocks(same, () => this.applyWallLength(len, opts))) return false;
+    for (const id of same) G.removeLock(this.plan, id);
     G.upsertLock(this.plan, spec); // une cote saisie est verrouillée
     this.afterChange();
     return true;
@@ -947,7 +957,9 @@ export class Editor {
       : G.setChainLength(this.plan, this.sel.id, total, opts);
     if (!ok) { this.undoStack.pop(); this.afterChange(); return false; }
     const spec = { kind: 'chain', wall: this.sel.id, side: r.side, ref: this.dimRef, len: total };
-    if (!this.guardLocks(G.findLock(this.plan, spec)?.id)) return false;
+    const same = (this.plan.locks || []).filter((l) => l.kind === 'chain' && l.wall === this.sel.id).map((l) => l.id);
+    if (!this.guardLocks(same, () => this.applyChainLength(total, opts))) return false;
+    for (const id of same) G.removeLock(this.plan, id);
     G.upsertLock(this.plan, spec);
     this.afterChange();
     return true;
