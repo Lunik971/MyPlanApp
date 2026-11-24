@@ -1032,7 +1032,20 @@ export class Editor {
   deleteSelection() {
     const s = this.sel;
     if (!s) return;
-    if (s.type === 'wall') this.mutate((plan) => G.removeWall(plan, s.id));
+    if (s.type === 'wall') {
+      // supprimer un mur change la forme des pièces voisines : on ne bloque pas, on lève les cotes devenues fausses
+      this.snapshot();
+      G.removeWall(this.plan, s.id);
+      const lay = G.computeLayout(this.plan);
+      const before = (this.plan.locks || []).length;
+      this.plan.locks = (this.plan.locks || []).filter((l) => {
+        const v = G.lockValue(this.plan, lay, l);
+        return v != null && Math.abs(v - l.len) <= 0.5;
+      });
+      const dropped = before - this.plan.locks.length;
+      this.afterChange();
+      if (dropped) this.hooks.toast?.(`🔓 ${dropped} cote${dropped > 1 ? 's' : ''} verrouillée${dropped > 1 ? 's' : ''} levée${dropped > 1 ? 's' : ''} (le mur supprimé les modifiait)`);
+    }
     else if (s.type === 'opening') this.mutate((plan) => { plan.openings = plan.openings.filter((o) => o.id !== s.id); });
     else if (s.type === 'furniture') this.mutate((plan) => { plan.furniture = plan.furniture.filter((f) => f.id !== s.id); });
     else if (s.type === 'measure') this.mutate((plan) => G.removeMeasure(plan, s.id));

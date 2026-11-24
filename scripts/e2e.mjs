@@ -183,6 +183,21 @@ try {
   ok(true, 'tout déverrouiller');
   await page.click('.sheet-head .x');
 
+  const del = await ev(() => {
+    const e = window.__app.editor;
+    const w0 = e.plan.walls[0];
+    window.__app.G.upsertLock(e.plan, { kind: 'wall', wall: w0.id, side: 0, ref: 'axis', len: window.__app.G.wallInfo(e.plan, w0).len });
+    const lk = e.plan.locks[0];
+    const nW = e.plan.walls.length;
+    const w = e.plan.walls.find((q) => q.id !== (lk && lk.wall)) || e.plan.walls[0];
+    e.select({ type: 'wall', id: w.id, side: 1 });
+    e.deleteSelection();
+    const nW2 = e.plan.walls.length;
+    e.undo(); // on remet le plan comme avant pour la suite
+    return { nW, nW2 };
+  });
+  ok(del.nW2 < del.nW, `supprimer un mur n'est jamais bloqué par une cote verrouillée (${del.nW} → ${del.nW2})`);
+
 
   console.log('Nom de pièce & meuble');
   await refit();

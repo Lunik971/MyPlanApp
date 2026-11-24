@@ -1,6 +1,6 @@
 // Service worker : coque de l'application en cache (ouverture instantanée / hors ligne),
 // l'API n'est jamais mise en cache.
-const CACHE = 'plan-appart-0.3.2';
+const CACHE = 'plan-appart-0.3.3';
 const SHELL = [
   '/', '/css/app.css', '/js/app.js',
   '/js/version.js', '/js/editor.js', '/js/render.js', '/js/geometry.js',
