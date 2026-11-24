@@ -420,7 +420,8 @@ export function wallChain(plan, wallId) {
       for (const w of plan.walls) {
         if (used.has(w.id) || (w.a !== cur && w.b !== cur)) continue;
         const dd = dirTo(w, cur);
-        if (Math.abs(d.x * dd.y - d.y * dd.x) < 0.01 && d.x * dd.x + d.y * dd.y > 0) { next = { w, dd }; break; }
+        // ±3° : un mur légèrement désaligné reste « un seul mur » à travers ses cloisons
+        if (Math.abs(d.x * dd.y - d.y * dd.x) < 0.05 && d.x * dd.x + d.y * dd.y > 0) { next = { w, dd }; break; }
       }
       if (!next) break;
       used.add(next.w.id);

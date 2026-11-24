@@ -492,3 +492,14 @@ test('le bout d’un mur droit coulisse le long du mur (pas de penchement)', () 
   assert.equal(p.nodes[id].y, 0);
   assert.equal(p.nodes[id].x, 620);
 });
+
+test('mur légèrement désaligné (2 cm) : reconnu comme un seul mur à travers les cloisons', () => {
+  const p = emptyPlan();
+  insertWall(p, 0, 0, 300, 0, 10);
+  insertWall(p, 300, 0, 600, 2, 10);
+  insertWall(p, 150, 0, 150, 200, 10);
+  insertWall(p, 450, 1, 450, 200, 10);
+  const w = p.walls.find((q) => Math.abs(p.nodes[q.a].x - 300) < 1 || Math.abs(p.nodes[q.b].x - 300) < 1);
+  const ch = wallChain(p, w.id);
+  assert.ok(ch.segments.length >= 3, `chaîne de ${ch.segments.length} segments`);
+});
