@@ -744,7 +744,31 @@ export class Editor {
       const a = plan.nodes[w.a], b = plan.nodes[w.b];
       return a && b && G.projectToSegment(P, a, b).d <= w.t / 2 + 0.6;
     }).map((w) => w.id);
-    // 1) bouts / coins : angles des faces, bouts de murs, nœuds
+    // 0) bords INTÉRIEURS d'abord (côté pièce) : coins des pièces, bords d'ouvertures, faces intérieures
+    {
+      const inner = [];
+      for (const e of this.layout.sides.values()) if (e.kind === 'room') inner.push(e.p0);
+      for (const o of plan.openings) {
+        const g = G.openingGeom(plan, o);
+        if (!g) continue;
+        for (const sd of [1, -1]) {
+          if (G.sideEntry(plan, this.layout, o.wall, sd)?.kind !== 'room') continue;
+          const off = sd * g.t / 2;
+          for (const ee of [-1, 1]) inner.push({ x: g.c.x + g.ux * ee * o.w / 2 + g.nx * off, y: g.c.y + g.uy * ee * o.w / 2 + g.ny * off });
+        }
+      }
+      let b0 = null, d0 = 20 / S;
+      for (const q of inner) { const d = G.dist(q, p); if (d < d0) { d0 = d; b0 = q; } }
+      if (b0) return { x: G.round1(b0.x), y: G.round1(b0.y), walls: wallsAt(b0), kind: 'corner' };
+      let f0 = null, fd = 18 / S;
+      for (const e of this.layout.sides.values()) {
+        if (e.kind !== 'room') continue;
+        const pr = G.projectToSegment(p, e.p0, e.p1);
+        if (pr.d < fd) { fd = pr.d; f0 = { x: pr.x, y: pr.y, walls: [e.wall] }; }
+      }
+      if (f0) return { x: G.round1(f0.x), y: G.round1(f0.y), walls: f0.walls, kind: 'face' };
+    }
+    // 1) à défaut (mur sans pièce) : bouts / coins : angles des faces, bouts de murs, nœuds
     const pts = [];
     for (const e of this.layout.sides.values()) pts.push(e.p0);
     for (const n of Object.values(plan.nodes)) pts.push(n);

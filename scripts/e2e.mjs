@@ -234,6 +234,15 @@ try {
   ok(moves.every((m) => Math.abs(m - moves[0]) < 0.6) && Math.abs(moves[0]) > 5, `tout le mur entier se déplace parallèlement (${moves.map((m) => Math.round(m)).join(' / ')} cm)`);
   await ev(() => { window.__app.editor.undo(); window.__app.editor.select(null); });
 
+  const snapIn = await ev(() => {
+    const e = window.__app.editor;
+    const ns = Object.values(e.plan.nodes);
+    const x0 = Math.min(...ns.map((n) => n.x)), y0 = Math.min(...ns.map((n) => n.y)), y1 = Math.max(...ns.map((n) => n.y));
+    const t = e.plan.walls.find((w) => e.plan.nodes[w.a].x === x0 && e.plan.nodes[w.b].x === x0).t;
+    const out = e.measSnap(e.toScreen({ x: x0 - t / 2 - 1, y: (y0 + y1) / 2 - 20 }));
+    return { x: out && out.x, expect: x0 + t / 2 };
+  });
+  ok(snapIn.x != null && Math.abs(snapIn.x - snapIn.expect) < 0.6, `Mesure : un toucher sur la face extérieure s'accroche au bord intérieur (${snapIn.x} / ${snapIn.expect})`);
   const mdrag = await ev(() => {
     const e = window.__app.editor, G = window.__app.G;
     e.setTool('select'); e.select(null);
