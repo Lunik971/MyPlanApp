@@ -1024,6 +1024,48 @@ export class Editor {
     this.mutate((plan) => G.setRoomMeta(plan, r, patch));
   }
 
+  // Liste des cotes verrouillées (pour la fenêtre « Cotes verrouillées »)
+  lockList() {
+    const out = [];
+    for (const lk of this.plan.locks || []) {
+      if (lk.kind === 'measure') {
+        const m = (this.plan.measures || []).find((q) => q.id === lk.measure);
+        if (m) out.push({ id: lk.id, label: 'Mesure', len: lk.len, target: { type: 'measure', id: m.id }, at: (() => { const d = G.measureDim(this.plan, m, 1); return d && d.mid; })() });
+      } else if (lk.kind === 'wall' || lk.kind === 'chain') {
+        const w = this.plan.walls.find((q) => q.id === lk.wall);
+        if (!w) continue;
+        const a = this.plan.nodes[w.a], b = this.plan.nodes[w.b];
+        out.push({
+          id: lk.id, label: lk.kind === 'chain' ? 'Mur entier' : 'Mur', len: lk.len,
+          ref: lk.ref === 'inner' ? 'intérieur' : lk.ref === 'outer' ? 'extérieur' : 'axe',
+          target: { type: 'wall', id: w.id, side: lk.side || 1 }, at: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        });
+      }
+    }
+    return out;
+  }
+
+  focusOn(target, at) {
+    this.setTool('select');
+    this.select(target);
+    if (at) this.ensureVisible(at, 80);
+  }
+
+  removeLockById(id) {
+    this.snapshot();
+    G.removeLock(this.plan, id);
+    this.afterChange();
+  }
+
+  unlockAll() {
+    const n = (this.plan.locks || []).length;
+    if (!n) return 0;
+    this.snapshot();
+    this.plan.locks = [];
+    this.afterChange();
+    return n;
+  }
+
   setSetting(k, v) {
     this.plan.settings[k] = v;
     this.hooks.change?.();
@@ -1056,6 +1098,7 @@ export class Editor {
       dimRef: this.dimRef,
       dimDelta: this.dimDelta(),
       meas: this.tool === 'measure' ? this.meas : null,
+      dimsLocked: this.plan.settings.dimsShow === 'locked',
       isMeasureLocked: (id) => (this.plan.locks || []).some((l) => l.kind === 'measure' && l.measure === id),
       isLocked: (wall, side) => (this.plan.locks || []).some((l) => (l.kind === 'wall' || l.kind === 'chain') && l.wall === wall && l.side === side && l.ref === this.dimRef) || false,
     });

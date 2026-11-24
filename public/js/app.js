@@ -714,6 +714,30 @@ async function exportImage() {
   document.body.append(a); a.click(); a.remove();
 }
 
+function locksSheet() {
+  const body = h('div', {});
+  const sh = openSheet('Cotes verrouillées', body);
+  const render = () => {
+    body.innerHTML = '';
+    const list = editor.lockList();
+    body.append(
+      h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Afficher :'),
+        seg([['all', 'Toutes les cotes'], ['locked', 'Verrouillées seulement']], () => (editor.plan.settings.dimsShow === 'locked' ? 'locked' : 'all'), (v) => { editor.setSetting('dimsShow', v); markDirty(); })),
+    );
+    if (!list.length) { body.append(h('p', { class: 'note' }, 'Aucune cote verrouillée. Une cote saisie ou une mesure posée est verrouillée automatiquement.')); return; }
+    const box = h('div', { class: 'lock-list' });
+    for (const it of list) {
+      box.append(h('div', { class: 'lock-item' },
+        h('button', { class: 'lock-main', onclick: () => { sh.close(); editor.focusOn(it.target, it.at); } },
+          h('b', {}, `🔒 ${G.fmtLen(it.len)}`), h('span', { class: 'muted' }, ` ${it.label}${it.ref ? ' · ' + it.ref : ''}`)),
+        h('button', { class: 'chip icon', title: 'Déverrouiller', 'aria-label': 'Déverrouiller', onclick: () => { editor.removeLockById(it.id); markDirty(); render(); } }, '🔓')));
+    }
+    body.append(box,
+      h('button', { class: 'btn danger-soft', onclick: () => { if (!confirm(`Déverrouiller les ${list.length} cotes ?`)) return; editor.unlockAll(); markDirty(); toast('Toutes les cotes sont déverrouillées'); render(); } }, `🔓 Tout déverrouiller (${list.length})`));
+  };
+  render();
+}
+
 function settingsSheet() {
   const s = editor.plan.settings;
   const grid = h('div', { class: 'chips' });
@@ -731,6 +755,7 @@ $('#btn-menu').addEventListener('click', () => {
   const sh = openSheet('Menu', h('div', { class: 'menu-list' },
     h('button', { onclick: () => { sh.close(); roomsSheet(); } }, h('span', { class: 'ico' }, '▦'), 'Surfaces par pièce'),
     h('button', { onclick: () => { sh.close(); exportImage(); } }, h('span', { class: 'ico' }, '🖼'), 'Exporter en image (PNG)'),
+    h('button', { onclick: () => { sh.close(); locksSheet(); } }, h('span', { class: 'ico' }, '🔒'), `Cotes verrouillées (${(editor.plan.locks || []).length})`),
     h('button', { onclick: () => { sh.close(); settingsSheet(); } }, h('span', { class: 'ico' }, '⚙'), 'Réglages du plan'),
     h('button', { onclick: async () => { sh.close(); await flushSave(); const r = await api('POST', `/api/plans/${state.plan.id}/duplicate`); toast('Copie créée — ouverte'); location.hash = `#/plan/${r.id}`; } }, h('span', { class: 'ico' }, '⎘'), 'Dupliquer ce plan'),
     installItem(),

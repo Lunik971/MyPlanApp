@@ -206,3 +206,8 @@ select.thick { height: 36px; width: auto; flex: 1; min-width: 0; padding: 0 6px;
 .panel-head { margin-bottom: 4px; }
 
 #ver { position: fixed; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 1px); font-size: .62rem; color: #8a94a3; pointer-events: none; z-index: 50; letter-spacing: .02em; text-shadow: 0 0 3px #fff; }
+
+.lock-list { display: grid; gap: 6px; margin: 8px 0 12px; }
+.lock-item { display: flex; gap: 8px; align-items: center; }
+.lock-main { flex: 1; text-align: left; border: 1.5px solid var(--line); background: #fff; border-radius: 12px; min-height: 44px; padding: 0 12px; font-size: .95rem; }
+.btn.danger-soft { width: 100%; background: #fff5f5; color: #b42318; border: 1.5px solid #f4c7c3; }

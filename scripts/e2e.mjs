@@ -151,6 +151,22 @@ try {
   });
   ok(refused.r === false && refused.same, 'une modification qui casse une cote verrouillée est refusée');
 
+  await page.click('#btn-menu');
+  await page.click('text=Cotes verrouillées');
+  await page.waitForSelector('.lock-item');
+  await page.screenshot({ path: shots + '/locks.png' });
+  const nLocks = await page.locator('.lock-item').count();
+  ok(nLocks >= 2, `fenêtre des cotes verrouillées (${nLocks})`);
+  await page.click('text=Verrouillées seulement');
+  ok(await ev(() => window.__app.editor.plan.settings.dimsShow === 'locked'), 'affichage limité aux cotes verrouillées');
+  await page.click('text=Toutes les cotes');
+  page.once('dialog', (d) => d.accept());
+  await page.click('text=Tout déverrouiller');
+  await page.waitForFunction(() => window.__app.editor.plan.locks.length === 0);
+  ok(true, 'tout déverrouiller');
+  await page.click('.sheet-head .x');
+
+
   console.log('Nom de pièce & meuble');
   await refit();
   await tapPlan(120, 200);

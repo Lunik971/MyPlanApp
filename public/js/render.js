@@ -335,6 +335,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
     const selSide = sel?.type === 'wall' && lay ? resolveSide(plan, lay, sel.id, sel.side || 1, mode).side : 0;
     for (const l of labels) {
       if (l.len * S < 38) continue;
+      if (o.dimsLocked && !o.isLocked?.(l.wall, l.side)) continue;
       const hot = sel?.type === 'wall' && sel.id === l.wall && l.side === selSide;
       const txt = (o.isLocked?.(l.wall, l.side) ? '🔒 ' : '') + fmtLen(l.len);
       if (hot) pill(ctx, txt, X(l.x), Y(l.y), { fg: '#fff', bg: BLUE, border: BLUE });
@@ -387,6 +388,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
   if (o.dims) {
     for (const m of plan.measures || []) {
       if (o.meas && m.id === o.activeMeasure) continue;
+      if (o.dimsLocked && !o.isMeasureLocked?.(m.id)) continue;
       const d = measureDim(plan, m, S);
       if (!d) continue;
       const on = sel?.type === 'measure' && sel.id === m.id;
