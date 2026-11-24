@@ -304,7 +304,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
       for (const sg of ch.segments) {
         if (sg.id === sel.id) continue;
         const ww = plan.walls.find((q) => q.id === sg.id), a = plan.nodes[sg.from], b = plan.nodes[sg.to];
-        ctx.lineWidth = Math.max(ww.t * S, 2.2) + 5; ctx.strokeStyle = 'rgba(37,99,235,.13)';
+        ctx.lineWidth = Math.max(ww.t * S, 2.2) + 5; ctx.strokeStyle = sel.chain ? 'rgba(37,99,235,.4)' : 'rgba(37,99,235,.13)';
         ctx.beginPath(); ctx.moveTo(X(a.x), Y(a.y)); ctx.lineTo(X(b.x), Y(b.y)); ctx.stroke();
       }
     }

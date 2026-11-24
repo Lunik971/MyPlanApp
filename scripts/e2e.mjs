@@ -199,6 +199,41 @@ try {
   ok(del.nW2 < del.nW, `supprimer un mur n'est jamais bloqué par une cote verrouillée (${del.nW} → ${del.nW2})`);
 
 
+  console.log('Mur entier : sélection et déplacement');
+  const wch = await ev(() => {
+    const e = window.__app.editor, G = window.__app.G;
+    e.setTool('select');
+    const w = e.plan.walls.find((q) => { const c = G.wallChain(e.plan, q.id); return c && c.segments.length > 1; });
+    e.select({ type: 'wall', id: w.id, side: 1 });
+    e.toggleChainSelection();
+    const c = G.wallChain(e.plan, w.id);
+    const ids = [c.segments[0].from, ...c.segments.map((x) => x.to)];
+    const r = e.canvas.getBoundingClientRect();
+    let pick = null;
+    for (const sg of c.segments) {
+      for (const t of [0.5, 0.2, 0.8, 0.35, 0.65]) {
+        const a = e.plan.nodes[sg.from], b = e.plan.nodes[sg.to];
+        const pt = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        e.ensureVisible(pt, 120);
+        const sp = e.toScreen(pt);
+        if (e.hit(sp)?.type === 'wall') { pick = { sp, horiz: Math.abs(a.y - b.y) < 1 }; break; }
+      }
+      if (pick) break;
+    }
+    const sp = pick.sp, horiz = pick.horiz;
+    return { ids, before: ids.map((id) => ({ ...e.plan.nodes[id] })), x: r.left + sp.x, y: r.top + sp.y, scale: e.view.s, horiz };
+  });
+  const dpx = 40;
+  await page.mouse.move(wch.x, wch.y);
+  await page.mouse.down();
+  await page.mouse.move(wch.x + (wch.horiz ? 0 : dpx / 2), wch.y + (wch.horiz ? dpx / 2 : 0), { steps: 4 });
+  await page.mouse.move(wch.x + (wch.horiz ? 0 : dpx), wch.y + (wch.horiz ? dpx : 0), { steps: 4 });
+  await page.mouse.up();
+  const afterChain = await ev((ids) => ids.map((id) => ({ ...window.__app.editor.plan.nodes[id] })), wch.ids);
+  const moves = afterChain.map((q, i) => (wch.horiz ? q.y - wch.before[i].y : q.x - wch.before[i].x));
+  ok(moves.every((m) => Math.abs(m - moves[0]) < 0.6) && Math.abs(moves[0]) > 5, `tout le mur entier se déplace parallèlement (${moves.map((m) => Math.round(m)).join(' / ')} cm)`);
+  await ev(() => { window.__app.editor.undo(); window.__app.editor.select(null); });
+
   console.log('Nom de pièce & meuble');
   await refit();
   await tapPlan(120, 200);

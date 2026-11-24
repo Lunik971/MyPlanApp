@@ -437,6 +437,12 @@ export class Editor {
     };
   }
 
+  toggleChainSelection() {
+    if (this.sel?.type !== 'wall') return;
+    this.select({ ...this.sel, chain: !this.sel.chain });
+    if (this.sel.chain) this.hooks.toast?.('Mur entier : glissez-le pour le déplacer');
+  }
+
   switchSide() {
     const m = this.measure();
     if (!m?.canSwitch) return;
@@ -493,11 +499,23 @@ export class Editor {
       if (h.type === 'label') { g.kind = 'pan'; return; } // toucher un chiffre sélectionne ce mur et cette face
       if (h.type === 'node') { g.kind = 'dragNode'; g.node = h.id; g.orig = { ...this.plan.nodes[h.id] }; return; }
       if (h.type === 'wall') {
-        this.select({ type: 'wall', id: h.id, side: this.tapSide(h.id, g.startPlan) });
+        // double toucher = tout le mur (suite de segments alignés) ; une fois le mur entier sélectionné, on le saisit n'importe où
+        const now = performance.now();
+        const dbl = this.lastWallTap && this.lastWallTap.id === h.id && now - this.lastWallTap.t < 380;
+        this.lastWallTap = { id: h.id, t: now };
+        const ch = G.wallChain(this.plan, h.id);
+        const multi = !!(ch && ch.segments.length > 1);
+        const keep = multi && this.sel?.type === 'wall' && this.sel.chain && ch.segments.some((s) => s.id === this.sel.id);
+        if (dbl && multi) this.select({ type: 'wall', id: h.id, side: this.tapSide(h.id, g.startPlan), chain: true });
+        else if (!keep) this.select({ type: 'wall', id: h.id, side: this.tapSide(h.id, g.startPlan) });
         const w = this.plan.walls.find((q) => q.id === h.id);
         const wi = G.wallInfo(this.plan, w);
         g.kind = 'dragWall'; g.w = w; g.n = { x: wi.nx, y: wi.ny };
         g.origA = { ...this.plan.nodes[w.a] }; g.origB = { ...this.plan.nodes[w.b] };
+        if (this.sel?.chain && multi) {
+          const ids = [ch.segments[0].from, ...ch.segments.map((s) => s.to)];
+          g.chain = ids.map((id) => ({ id, o: { ...this.plan.nodes[id] } }));
+        }
         return;
       }
       g.kind = 'pan'; // un glisser sur une pièce déplace la vue ; un simple toucher la sélectionne
@@ -586,8 +604,11 @@ export class Editor {
         if (!g.snap) { this.snapshot(); g.snap = true; }
         const st = this.snapStep();
         const d = Math.round(((p.x - g.startPlan.x) * g.n.x + (p.y - g.startPlan.y) * g.n.y) / st) * st;
-        G.moveNode(plan, g.w.a, g.origA.x + g.n.x * d, g.origA.y + g.n.y * d);
-        G.moveNode(plan, g.w.b, g.origB.x + g.n.x * d, g.origB.y + g.n.y * d);
+        if (g.chain) for (const { id, o } of g.chain) G.moveNode(plan, id, o.x + g.n.x * d, o.y + g.n.y * d);
+        else {
+          G.moveNode(plan, g.w.a, g.origA.x + g.n.x * d, g.origA.y + g.n.y * d);
+          G.moveNode(plan, g.w.b, g.origB.x + g.n.x * d, g.origB.y + g.n.y * d);
+        }
         this.relayout();
         this.draw();
         this.hooks.live?.();

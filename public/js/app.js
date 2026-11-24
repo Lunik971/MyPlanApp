@@ -460,7 +460,7 @@ function refreshPanel(force = false) {
   const o = editor?.selected;
   if (!sel || !o || editor.tool === 'wall') { panel.hidden = true; panel.innerHTML = ''; panelKey = ''; panelSync = []; return; }
   const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '') + (sel.type === 'measure' ? ':' + (editor.plan.locks || []).some((l) => l.measure === sel.id) : '')
-    + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) + ':' + (editor.measure()?.locked ? 1 : 0) + (editor.measure()?.chainLocked ? 1 : 0) : '');
+    + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) + ':' + (editor.measure()?.locked ? 1 : 0) + (editor.measure()?.chainLocked ? 1 : 0) + (sel.chain ? ':c' : '') : '');
   if (force || key !== panelKey) {
     panelKey = key; panelSync = [];
     panel.innerHTML = '';
@@ -516,6 +516,7 @@ function setDimRef(v) {
   refreshPanel(true);
 }
 
+const sel0 = () => editor.sel || {};
 function wallPanel() {
   const cur = () => editor.selected;
   const m = () => editor.measure();
@@ -562,6 +563,7 @@ function wallPanel() {
       multi ? field('Mur entier', () => m().total, applyChain, { min: 5 }) : null,
       multi ? lockBtn(m()?.chainLocked, () => { editor.toggleLock('chain', m().total); refreshPanel(true); }, 'Verrouiller le mur entier') : null),
     segList,
+    multi ? h('div', { class: 'row' }, h('button', { class: 'chip' + (sel0().chain ? ' on' : ''), onclick: () => { editor.toggleChainSelection(); refreshPanel(true); } }, sel0().chain ? '✓ Mur entier sélectionné (glissez-le)' : '↔ Sélectionner le mur entier')) : null,
     more,
   );
 }
