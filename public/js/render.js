@@ -261,7 +261,7 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
   for (const op of plan.openings) {
     const g = openingGeom(plan, op);
     if (!g) continue;
-    const h = op.w / 2, th = g.t / 2 + (ow + 1) / S;
+    const h = op.w / 2 - 0.2 / S, th = g.t / 2 + (ow + 1) / S;
     const P = (a, b) => [X(g.c.x + g.ux * a + g.nx * b), Y(g.c.y + g.uy * a + g.ny * b)];
     lctx.beginPath();
     [[-h, -th], [h, -th], [h, th], [-h, th]].forEach(([a, b], i) => { const p = P(a, b); i ? lctx.lineTo(p[0], p[1]) : lctx.moveTo(p[0], p[1]); });

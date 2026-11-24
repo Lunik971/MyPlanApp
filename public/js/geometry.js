@@ -494,12 +494,32 @@ export const OPENING_KINDS = {
   frame: { label: 'Cadre sans porte', w: 83, h: 204, sill: 0 },
 };
 
+// Distance, le long du mur w, entre un de ses nœuds et la face des autres murs qui s'y rejoignent :
+// une ouverture ne doit pas entamer ces murs (sa limite est le mur, pas l'intérieur du mur voisin).
+function endInset(plan, w, nodeId) {
+  const here = plan.nodes[nodeId];
+  const far = plan.nodes[w.a === nodeId ? w.b : w.a];
+  const L = dist(here, far) || 1;
+  const ux = (far.x - here.x) / L, uy = (far.y - here.y) / L;
+  let inset = 0;
+  for (const q of plan.walls) {
+    if (q === w || (q.a !== nodeId && q.b !== nodeId)) continue;
+    const o = plan.nodes[q.a === nodeId ? q.b : q.a];
+    const l = dist(here, o) || 1;
+    const sin = Math.abs(ux * ((o.y - here.y) / l) - uy * ((o.x - here.x) / l));
+    if (sin < 0.1) continue; // prolongement du même mur
+    inset = Math.max(inset, q.t / 2 / Math.max(sin, 0.3));
+  }
+  return inset;
+}
+
 export function clampOpening(plan, o) {
   const w = plan.walls.find((q) => q.id === o.wall);
   if (!w) return;
   const { len } = wallInfo(plan, w);
-  o.w = Math.max(10, Math.min(o.w, len));
-  o.pos = round1(clamp(o.pos, o.w / 2, len - o.w / 2));
+  const lo = endInset(plan, w, w.a), hi = len - endInset(plan, w, w.b);
+  o.w = Math.max(10, Math.min(o.w, Math.max(10, hi - lo)));
+  o.pos = round1(clamp(o.pos, lo + o.w / 2, hi - o.w / 2));
 }
 
 export function addOpening(plan, wallId, pos, kind = 'door', overrides = {}) {

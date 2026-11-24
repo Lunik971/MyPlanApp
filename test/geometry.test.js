@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { uid,
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, clampOpening, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -413,4 +413,17 @@ test('nettoyage : décroché de 4 cm et mur de travers redressés', () => {
   assert.ok(left.every((q) => q.x === left[0].x), 'mur de gauche vertical');
   const ys = Object.values(p.nodes).filter((q) => q.y > 200).map((q) => q.y);
   assert.ok(ys.every((y) => y === ys[0]), 'mur du bas horizontal');
+});
+
+test('une ouverture ne creuse pas le mur voisin : elle s’arrête à sa face', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const top = p.walls.find((w) => p.nodes[w.a].y === 0 && p.nodes[w.b].y === 0);
+  const op = addOpening(p, top.id, 5, 'arch', { w: 100 }); // collée au coin
+  clampOpening(p, op);
+  const len = Math.hypot(p.nodes[top.a].x - p.nodes[top.b].x, p.nodes[top.a].y - p.nodes[top.b].y);
+  assert.ok(op.pos - op.w / 2 >= 10 - 0.1, `bord ≥ face du mur voisin (${op.pos - op.w / 2})`);
+  const op2 = addOpening(p, top.id, len, 'door', { w: 90 });
+  clampOpening(p, op2);
+  assert.ok(op2.pos + op2.w / 2 <= len - 10 + 0.1, 'bord de fin ≤ face du mur voisin');
 });

@@ -83,6 +83,7 @@ export class Editor {
   }
 
   afterChange() {
+    for (const o of this.plan.openings) G.clampOpening(this.plan, o); // une ouverture reste dans son mur
     this.relayout();
     this.checkSelection();
     this.hooks.change?.();
