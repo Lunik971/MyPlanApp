@@ -535,29 +535,33 @@ function wallPanel() {
   renderThick(); panelSync.push(renderThick);
   const multi = (m()?.count || 1) > 1;
   const refSeg = seg(REFS, () => editor.dimRef, setDimRef);
+  refSeg.classList.add('sm');
   const face = textBind(() => { const q = m(); return q ? (q.mode === 'axis' ? 'à l’axe' : q.entry ? `côté ${q.faceName}` : 'à l’axe') : ''; });
   const switchBtn = m()?.canSwitch
-    ? h('button', { class: 'chip', title: 'Mesurer l’autre côté du mur', onclick: () => { editor.switchSide(); refreshPanel(true); } }, '⇄ Autre côté') : null;
+    ? h('button', { class: 'chip', title: 'Mesurer l’autre côté du mur', 'aria-label': 'Autre côté', onclick: () => { editor.switchSide(); refreshPanel(true); } }, '⇄') : null;
   const distSeg = multi ? h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Mur entier :'),
     seg([['selected', 'Ce segment'], ['last', 'Au bout'], ['prop', 'Réparti']], () => prefs.chainDist, (v) => { prefs.chainDist = v; })) : null;
   const segList = multi ? h('p', { class: 'note' }, textBind(() => {
     const q = m(); return q ? 'Segments : ' + q.segs.map((x, i) => (i === q.index ? '[' + G.fmtCm(x) + ']' : G.fmtCm(x))).join(' + ') + ' cm' : '';
   })) : null;
-  return h('div', {},
-    panelHead('Mur', h('span', { class: 'muted' }, textBind(() => (m() ? G.fmtLen(m().len) : ''))), true),
-    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Cotes :'), refSeg, switchBtn),
-    h('div', { class: 'row fields' },
-      field(multi ? 'Ce segment' : 'Longueur', () => m().len, apply, { min: 5 }),
-      multi ? field('Mur entier', () => m().total, applyChain, { min: 5 }) : null),
-    h('div', { class: 'row' },
-      h('button', { class: 'chip' + (m()?.locked ? ' on' : ''), onclick: () => { editor.toggleLock('wall', m().len); refreshPanel(true); } }, m()?.locked ? '🔒 Segment verrouillé' : '🔓 Verrouiller le segment'),
-      multi ? h('button', { class: 'chip' + (m()?.chainLocked ? ' on' : ''), onclick: () => { editor.toggleLock('chain', m().total); refreshPanel(true); } }, m()?.chainLocked ? '🔒 Mur entier verrouillé' : '🔓 Verrouiller le mur entier') : null),
-    h('p', { class: 'note' }, textBind(() => `Mesure ${face.nodeValue}. Une cote saisie est verrouillée automatiquement.`)),
-    distSeg, segList,
+  const lockBtn = (on, onClick, title) => h('button', { class: 'chip icon' + (on ? ' on' : ''), title, 'aria-label': title, onclick: onClick }, on ? '🔒' : '🔓');
+  const more = h('details', { class: 'more' }, h('summary', {}, 'Options'),
+    distSeg,
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Garder fixe :'), fixSeg),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Correction :'), seg([['stretch', 'Étirer la pièce'], ['point', 'Ce point seul']], () => prefs.wallMode, (v) => { prefs.wallMode = v; })),
-    h('p', { class: 'note' }, 'Étirer garde les angles droits (ce qui est au-delà suit). Surfaces calculées à l’intérieur.'),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Épaisseur (cm) :'), thick),
+    h('p', { class: 'note' }, textBind(() => `Mesure ${face.nodeValue}. Une cote saisie est verrouillée automatiquement. Étirer garde les angles droits. Surfaces calculées à l’intérieur.`)),
+  );
+  return h('div', {},
+    panelHead('Mur', h('span', { class: 'muted' }, textBind(() => (m() ? G.fmtLen(m().len) : ''))), true),
+    h('div', { class: 'row tight' }, refSeg, switchBtn),
+    h('div', { class: 'row tight end' },
+      field(multi ? 'Ce segment' : 'Longueur', () => m().len, apply, { min: 5 }),
+      lockBtn(m()?.locked, () => { editor.toggleLock('wall', m().len); refreshPanel(true); }, 'Verrouiller le segment'),
+      multi ? field('Mur entier', () => m().total, applyChain, { min: 5 }) : null,
+      multi ? lockBtn(m()?.chainLocked, () => { editor.toggleLock('chain', m().total); refreshPanel(true); }, 'Verrouiller le mur entier') : null),
+    segList,
+    more,
   );
 }
 
