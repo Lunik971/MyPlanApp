@@ -1,6 +1,6 @@
 // Service worker : coque de l'application en cache (ouverture instantanée / hors ligne),
 // l'API n'est jamais mise en cache.
-const CACHE = 'plan-appart-0.2.0';
+const CACHE = 'plan-appart-0.2.1';
 const SHELL = [
   '/', '/css/app.css', '/js/app.js',
   '/js/version.js', '/js/editor.js', '/js/render.js', '/js/geometry.js',
@@ -23,7 +23,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
   // réseau d'abord (pour toujours avoir la dernière version), cache en secours
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(req, { cache: 'no-cache' }).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req).then((r) => r || caches.match('/'))),

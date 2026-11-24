@@ -72,4 +72,4 @@ Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre,
 
 ## Version
 
-Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.2.0 → vX dispo » : rechargez (Ctrl+F5).
+Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.2.1 → vX dispo » : rechargez (Ctrl+F5).

@@ -1,6 +1,6 @@
 {
   "name": "plan-appart",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Éditeur de plans d'appartement mobile-first (PWA) : murs cotés, surfaces par pièce, portes/fenêtres, ameublement",
   "type": "module",
   "private": true,

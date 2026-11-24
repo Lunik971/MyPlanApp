@@ -183,7 +183,8 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Introuvable' }));
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   extensions: ['html'],
   setHeaders(res, file) {
-    if (file.endsWith('sw.js') || file.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+    // toujours revalider (ETag) : une mise à jour du serveur est vue au prochain chargement
+    res.setHeader('Cache-Control', 'no-cache');
   },
 }));
 
