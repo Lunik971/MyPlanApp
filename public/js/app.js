@@ -374,7 +374,7 @@ function buildTools() {
 function onTool(tool) {
   for (const b of $('#tools').children) b.classList.toggle('on', b.dataset.tool === tool);
   $('#draftbar').hidden = tool !== 'wall';
-  $('#kindbar').hidden = tool !== 'opening';
+  updateKindBar();
   $('#measbar').hidden = tool !== 'measure';
   measKey = '';
   if (tool === 'measure') { buildMeasBar(); hint('Touchez le 1er point (mur, coin…), puis le 2e. Saisissez la cote pour ajuster.', 6000); }
@@ -461,7 +461,7 @@ function buildMeasBar() {
 function buildKindBar() {
   const bar = $('#kindbar');
   bar.innerHTML = '';
-  const chips = h('div', { class: 'chips' });
+  const chips = h('div', { class: 'chips scroll' });
   const render = () => {
     chips.innerHTML = '';
     for (const [k, d] of Object.entries(G.OPENING_KINDS)) chips.append(h('button', { class: 'chip' + (editor.openingKind === k ? ' on' : ''), onclick: () => { editor.setOpeningKind(k); render(); } }, d.label));
@@ -472,7 +472,12 @@ function buildKindBar() {
 
 // ───────────────────────── panneau de sélection ─────────────────────────
 
+// outil Porte/fenêtre : la barre de types règle la prochaine pose ; le panneau de l'ouverture posée
+// n'affiche alors pas ses propres types (pas de doublon) — pour changer le type d'une ouverture : outil Sélection
+function updateKindBar() { $('#kindbar').hidden = editor.tool !== 'opening'; }
+
 function onSelect(sel) {
+  updateKindBar();
   refreshPanel(true);
   if (sel) requestAnimationFrame(ensureVisible);
 }
@@ -494,7 +499,7 @@ function refreshPanel(force = false) {
   const sel = editor?.sel;
   const o = editor?.selected;
   if (!sel || !o || editor.tool === 'wall') { panel.hidden = true; panel.innerHTML = ''; panelKey = ''; panelSync = []; return; }
-  const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind : '') + (sel.type === 'measure' ? ':' + (editor.plan.locks || []).some((l) => l.measure === sel.id) : '')
+  const key = sel.type + ':' + sel.id + (sel.type === 'opening' ? ':' + o.kind + ':' + editor.tool : '') + (sel.type === 'measure' ? ':' + (editor.plan.locks || []).some((l) => l.measure === sel.id) : '')
     + (sel.type === 'wall' ? ':' + (editor.measure()?.count || 1) + ':' + editor.dimRef + ':' + (editor.measure()?.canSwitch ? 1 : 0) + ':' + (editor.measure()?.locked ? 1 : 0) + (editor.measure()?.chainLocked ? 1 : 0) + (sel.chain ? ':c' : '') : '');
   if (force || key !== panelKey) {
     panelKey = key; panelSync = [];
@@ -606,12 +611,12 @@ function wallPanel() {
 function openingPanel() {
   const cur = () => editor.selected;
   const isDoor = () => ['door', 'double', 'doubleglass', 'frenchwin'].includes(cur().kind);
-  const kinds = h('div', { class: 'chips' });
+  const kinds = h('div', { class: 'chips scroll' });
   for (const [k, d] of Object.entries(G.OPENING_KINDS)) kinds.append(h('button', { class: 'chip' + (cur().kind === k ? ' on' : ''), onclick: () => editor.updateOpening({ kind: k }) }, d.label));
   const showSill = cur().kind === 'window' || cur().kind === 'bay';
   return h('div', {},
     panelHead(G.OPENING_KINDS[cur().kind].label),
-    kinds,
+    editor.tool === 'opening' ? null : kinds,
     h('div', { class: 'row' },
       field('Largeur', () => cur().w, (v) => editor.updateOpening({ w: v }), { min: 10 }),
       field('Hauteur', () => cur().h, (v) => editor.updateOpening({ h: v }), { min: 10 }),

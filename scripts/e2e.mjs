@@ -90,6 +90,7 @@ try {
   await tapPlan(120, 0);
   await page.waitForSelector('#panel:not([hidden])');
   ok((await page.textContent('#panel')).includes('Porte'), 'une porte est posée et son panneau s’ouvre');
+  ok((await page.locator('#panel .chips').count()) === 0 && await page.locator('#kindbar').isVisible(), 'pas de doublon : types dans la barre du bas seulement quand une ouverture vient d’être posée');
   await page.fill('#panel label:has-text("Largeur") input', '93');
   await page.press('#panel label:has-text("Largeur") input', 'Enter');
   let ow = await ev(() => window.__app.editor.plan.openings[0].w);

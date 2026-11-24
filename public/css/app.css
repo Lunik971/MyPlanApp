@@ -218,3 +218,7 @@ select.thick { height: 36px; width: auto; flex: 1; min-width: 0; padding: 0 6px;
 #v3bar .seg { background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.18); }
 body.mode3d #dock, body.mode3d #tools, body.mode3d #z-in, body.mode3d #z-out, body.mode3d #z-dims { display: none; }
 body.mode3d #z-3d { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+.chips.scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.chips.scroll::-webkit-scrollbar { display: none; }
+.chips.scroll .chip { flex: none; white-space: nowrap; }
