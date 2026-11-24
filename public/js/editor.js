@@ -884,11 +884,12 @@ export class Editor {
   }
 
   // Modifier une mesure conservée (outil Sélection) : même logique que la saisie de l'outil Mesure
-  applySelectedMeasure(len, move = 'both') {
+  applySelectedMeasure(len, move = 'outer') {
     const mm = this.sel?.type === 'measure' ? this.selected : null;
     const e = mm && G.measureEnds(this.plan, mm);
     if (!e || !(len >= 1)) return false;
     const ex = G.findLock(this.plan, { kind: 'measure', measure: mm.id });
+    if (move === 'outer') move = G.measureOuterMove(this.plan, e.A, e.B);
     this.snapshot();
     if (!G.adjustMeasure(this.plan, e.A, e.B, len, { move })) { this.undoStack.pop(); return false; }
     if (!this.guardLocks(ex?.id, () => this.applySelectedMeasure(len, move))) return false;
@@ -918,12 +919,13 @@ export class Editor {
   }
 
   // Saisie de la cote : décale ce qui est au-delà de B (ou en deçà de A), puis verrouille
-  applyMeasure(len, move = 'both') {
+  applyMeasure(len, move = 'outer') {
     const m = this.meas;
     if (!m?.B || !(len >= 1)) return false;
     const spec = m.id ? { kind: 'measure', measure: m.id } : null;
     const ex = spec && G.findLock(this.plan, spec);
     const L = G.dist(m.A, m.B), dx = (m.B.x - m.A.x) / L, dy = (m.B.y - m.A.y) / L;
+    if (move === 'outer') move = G.measureOuterMove(this.plan, m.A, m.B);
     this.snapshot();
     if (!G.adjustMeasure(this.plan, m.A, m.B, len, { move })) { this.undoStack.pop(); return false; }
     if (!this.guardLocks(ex?.id, () => this.applyMeasure(len, move))) return false;

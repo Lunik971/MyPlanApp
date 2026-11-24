@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { uid,
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, nodeDragPlan, moveNodeOrtho, clampOpening, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, nearerToCenter, nodeDragPlan, moveNodeOrtho, clampOpening, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -502,4 +502,23 @@ test('mur légèrement désaligné (2 cm) : reconnu comme un seul mur à travers
   const w = p.walls.find((q) => Math.abs(p.nodes[q.a].x - 300) < 1 || Math.abs(p.nodes[q.b].x - 300) < 1);
   const ch = wallChain(p, w.id);
   assert.ok(ch.segments.length >= 3, `chaîne de ${ch.segments.length} segments`);
+});
+
+test('par défaut une cote s’agrandit vers l’extérieur : le bout côté façade avance, le centre ne bouge pas', () => {
+  const { p } = triplex(); // rectangle 600×300 avec cloisons en x=200 et x=400
+  // cloison verticale x=200 : agrandir sa longueur → le bout le plus éloigné du centre (y=0 ou y=300) avance
+  const part = p.walls.find((w) => p.nodes[w.a].x === 200 && p.nodes[w.b].x === 200 && Math.abs(p.nodes[w.a].y - p.nodes[w.b].y) > 100);
+  const ys = [p.nodes[part.a].y, p.nodes[part.b].y];
+  assert.ok(setWallLength(p, part.id, 340, { fixed: 'outer', mode: 'stretch' }));
+  const maxY = Math.max(...Object.values(p.nodes).map((n) => n.y)), minY = Math.min(...Object.values(p.nodes).map((n) => n.y));
+  assert.equal(maxY - minY, 340);
+  assert.ok(ys.length === 2);
+});
+
+test('le côté qui avance est le plus éloigné du centre du bâtiment', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 10);
+  // mesure de x=50 à x=150 : le centre est en x=300 → le bord x=50 (le plus loin) avance vers l'extérieur
+  assert.equal(nearerToCenter(p, { x: 50, y: 150 }, { x: 150, y: 150 }), 'Q');
+  assert.equal(nearerToCenter(p, { x: 450, y: 150 }, { x: 550, y: 150 }), 'P');
 });

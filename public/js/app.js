@@ -214,7 +214,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && dir
 
 // ───────────────────────── éditeur ─────────────────────────
 
-const prefs = { wallFix: 'center', wallMode: 'stretch', chainDist: 'selected' };
+const prefs = { wallFix: 'outer', wallMode: 'stretch', chainDist: 'selected' };
 let panelKey = '', panelSync = [];
 
 function ensureEditor() {
@@ -391,7 +391,7 @@ function onDraft(d) {
 
 // ───────────────────────── barre « ouverture » ─────────────────────────
 
-const measPrefs = { move: 'both' };
+const measPrefs = { move: 'outer' };
 let measKey = '';
 function buildMeasBar() {
   const bar = $('#measbar');
@@ -418,7 +418,7 @@ function buildMeasBar() {
       h('button', { class: 'chip' + (info.locked ? ' on' : ''), onclick: () => editor.toggleMeasureLock() }, info.locked ? '🔒 Verrouillée' : info.lockable ? '🔓 Verrouiller' : '🔓 Libre'),
       h('button', { class: 'chip', onclick: () => editor.resetMeasure() }, 'Nouvelle'),
       h('button', { class: 'chip', title: 'Retirer cette mesure du plan', onclick: () => editor.removeActiveMeasure() }, '🗑')),
-    h('div', { class: 'row tight' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['both', 'Des 2 côtés'], ['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
+    h('div', { class: 'row tight' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['outer', 'Vers l’extérieur'], ['both', 'Des 2 côtés'], ['b', 'Côté 2e pt'], ['a', 'Côté 1er pt']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
     info.lockable ? null : h('p', { class: 'note' }, 'Points libres : la cote règle la distance mais ne peut pas être verrouillée.'),
   );
 }
@@ -524,12 +524,12 @@ function wallPanel() {
   const apply = (v) => {
     const w = cur(); const { firstIsA } = sideLabels(w);
     const keepFirst = prefs.wallFix === 'first';
-    const fixed = prefs.wallFix === 'center' ? 'center' : keepFirst === firstIsA ? 'a' : 'b';
+    const fixed = prefs.wallFix === 'center' ? 'center' : prefs.wallFix === 'outer' ? 'outer' : keepFirst === firstIsA ? 'a' : 'b';
     editor.applyWallLength(v, { fixed, mode: prefs.wallMode });
   };
   const applyChain = (v) => editor.applyChainLength(v, { fixed: prefs.wallFix, distribute: prefs.chainDist, mode: prefs.wallMode });
   const fixSeg = h('span');
-  const renderFix = () => { fixSeg.innerHTML = ''; const [l1, l2] = labels(); fixSeg.append(seg([['center', 'Des 2 côtés'], ['first', l1 + ' fixe'], ['second', l2 + ' fixe']], () => prefs.wallFix, (v) => { prefs.wallFix = v; })); };
+  const renderFix = () => { fixSeg.innerHTML = ''; const [l1, l2] = labels(); fixSeg.append(seg([['outer', 'Vers l’extérieur'], ['center', 'Des 2 côtés'], ['first', l1 + ' fixe'], ['second', l2 + ' fixe']], () => prefs.wallFix, (v) => { prefs.wallFix = v; })); };
   renderFix();
   panelSync.push(renderFix);
   const thick = h('div', { class: 'chips' });
@@ -595,7 +595,7 @@ function measurePanel() {
   return h('div', {},
     panelHead('Mesure', h('span', { class: 'muted' }, textBind(() => G.fmtLen(len())))),
     h('div', { class: 'row' }, field('Cote', len, (v) => editor.applySelectedMeasure(v, measPrefs.move), { min: 1 })),
-    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['both', 'Des 2 côtés'], ['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
+    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['outer', 'Vers l’extérieur'], ['both', 'Des 2 côtés'], ['b', 'Côté 2e pt'], ['a', 'Côté 1er pt']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
     h('div', { class: 'row' }, h('button', { class: 'chip' + (isLk() ? ' on' : ''), onclick: () => { editor.toggleSelectedMeasureLock(); refreshPanel(true); } }, isLk() ? '🔒 Verrouillée' : '🔓 Verrouiller')),
     h('div', { class: 'row' }, h('button', { class: 'chip', onclick: () => { editor.resetMeasurePlacement(); } }, '↺ Position automatique')),
     h('p', { class: 'note' }, 'Glissez le chiffre ou la ligne pour déplacer la cote. Mesure conservée et verrouillée : elle suit les murs, et une modification qui la ferait changer est refusée. Tapez une nouvelle cote pour la corriger (le verrou est mis à jour) ; 🗑 la supprime.'));

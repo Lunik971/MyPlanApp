@@ -362,9 +362,26 @@ function growPerpendicular(plan, moving, ux, uy, stopNode) {
   }
 }
 
+// Quelle extrémité garder fixe pour que la modification parte vers l'EXTÉRIEUR du plan : celle
+// qui est la plus proche du centre du bâtiment (l'autre bout, côté façade, est celui qui avance).
+export function nearerToCenter(plan, P, Q) {
+  const bb = planBounds(plan);
+  if (!bb) return 'P';
+  const c = { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 };
+  const L = dist(P, Q) || 1, ux = (Q.x - P.x) / L, uy = (Q.y - P.y) / L;
+  const tc = (c.x - P.x) * ux + (c.y - P.y) * uy;
+  return Math.abs(L - tc) < Math.abs(tc) ? 'Q' : 'P';
+}
+
+// Côté qui avance pour une mesure entre A et B : celui qui est le plus loin du centre ('a' ou 'b')
+export function measureOuterMove(plan, A, B) {
+  return nearerToCenter(plan, A, B) === 'Q' ? 'a' : 'b';
+}
+
 export function setWallLength(plan, wallId, newLen, { fixed = 'a', mode = 'stretch' } = {}) {
   const w = plan.walls.find((q) => q.id === wallId);
   if (!w || !(newLen >= 1)) return false;
+  if (fixed === 'outer') fixed = nearerToCenter(plan, plan.nodes[w.a], plan.nodes[w.b]) === 'Q' ? 'b' : 'a';
   if (fixed === 'center') { // par défaut : la différence est répartie des deux côtés du mur
     const L0 = dist(plan.nodes[w.a], plan.nodes[w.b]);
     const half = (newLen - L0) / 2;
@@ -460,6 +477,10 @@ export function wallChain(plan, wallId) {
 export function setChainLength(plan, wallId, newTotal, { fixed = 'first', distribute = 'selected', mode = 'stretch' } = {}) {
   const ch = wallChain(plan, wallId);
   if (!ch || !(newTotal >= 1)) return false;
+  if (fixed === 'outer') {
+    const s0 = ch.segments[0], s1 = ch.segments[ch.segments.length - 1];
+    fixed = nearerToCenter(plan, plan.nodes[s0.from], plan.nodes[s1.to]) === 'Q' ? 'second' : 'first';
+  }
   if (fixed === 'center') {
     const half = (newTotal - ch.total) / 2;
     if (!(ch.total + half >= 1)) return false;
@@ -960,9 +981,10 @@ export function gapSpec(plan, A, B) {
 
 // Outil Mesure : règle la distance entre deux points en décalant tout ce qui se trouve
 // au-delà du point B (move:'b') ou en deçà du point A (move:'a').
-export function adjustMeasure(plan, A, B, newLen, { move = 'both' } = {}) {
+export function adjustMeasure(plan, A, B, newLen, { move = 'outer' } = {}) {
   const L = dist(A, B);
   if (L < 1e-6 || !(newLen >= 1)) return false;
+  if (move === 'outer') move = measureOuterMove(plan, A, B);
   if (move === 'both') { // moitié de chaque côté
     const half = (newLen - L) / 2, ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
     if (!(L + half >= 1)) return false;
