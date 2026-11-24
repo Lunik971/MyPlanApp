@@ -314,8 +314,11 @@ export class Editor {
       const dx = p.x - from.x, dy = p.y - from.y, L = Math.hypot(dx, dy);
       if (L < 0.5) return { ...res, x: from.x, y: from.y };
       let ang = Math.atan2(dy, dx), locked = false;
+      // tracé droit par défaut : horizontal / vertical à 12° près, diagonale à 5° près
+      const a90 = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);
       const a45 = Math.round(ang / (Math.PI / 4)) * (Math.PI / 4);
-      if (Math.abs(angDiff(ang, a45)) < (6 * Math.PI) / 180) { ang = a45; locked = true; }
+      if (Math.abs(angDiff(ang, a90)) < (12 * Math.PI) / 180) { ang = a90; locked = true; }
+      else if (Math.abs(angDiff(ang, a45)) < (5 * Math.PI) / 180) { ang = a45; locked = true; }
       const len = Math.max(step, Math.round(L / step) * step);
       res.x = from.x + Math.cos(ang) * len; res.y = from.y + Math.sin(ang) * len;
       if (locked) {
@@ -880,6 +883,7 @@ export class Editor {
     const d = this.draft;
     this.snapshot();
     G.insertWall(this.plan, d.last.x, d.last.y, x, y, this.plan.settings.wallT);
+    G.mergeCollinear(this.plan); // des petits segments alignés ne font plus qu'un seul grand mur
     d.last = { x, y }; d.count++;
     const closed = d.count >= 2 && d.first && G.dist(d.first, d.last) < 1;
     d.preview = null; d.guides = [];

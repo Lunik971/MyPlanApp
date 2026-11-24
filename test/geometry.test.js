@@ -427,3 +427,21 @@ test('une ouverture ne creuse pas le mur voisin : elle s’arrête à sa face', 
   clampOpening(p, op2);
   assert.ok(op2.pos + op2.w / 2 <= len - 10 + 0.1, 'bord de fin ≤ face du mur voisin');
 });
+
+test('plusieurs petits segments alignés (à 2 cm près) ne forment plus qu’un seul mur', () => {
+  const p = emptyPlan();
+  insertWall(p, 0, 0, 200, 1, 10);
+  insertWall(p, 200, 1, 400, -1, 10);
+  insertWall(p, 400, -1, 600, 0, 10);
+  mergeCollinear(p);
+  assert.equal(p.walls.length, 1, `un seul mur (${p.walls.length})`);
+  const w = p.walls[0];
+  assert.ok(Math.abs(Math.hypot(p.nodes[w.a].x - p.nodes[w.b].x, p.nodes[w.a].y - p.nodes[w.b].y) - 600) < 1);
+});
+
+test('un vrai coude (10°) n’est pas fusionné', () => {
+  const p = emptyPlan();
+  insertWall(p, 0, 0, 300, 0, 10);
+  insertWall(p, 300, 0, 600, 52, 10);
+  assert.equal(p.walls.length, 2);
+});

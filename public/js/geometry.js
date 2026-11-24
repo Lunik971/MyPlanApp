@@ -212,7 +212,9 @@ function orientOpening(o, wasReversed) {
 }
 
 // Fusionne les nœuds de degré 2 alignés (suite à une suppression) pour retrouver des murs entiers.
-export function mergeCollinear(plan) {
+// tolCm : un point intermédiaire à moins de tolCm de la droite (et ≤ 5° d'écart) est supprimé :
+// plusieurs petits segments alignés ne forment plus qu'un seul grand mur.
+export function mergeCollinear(plan, tolCm = 2.5) {
   let changed = true;
   while (changed) {
     changed = false;
@@ -230,7 +232,9 @@ export function mergeCollinear(plan) {
       if (l1 < 1e-6 || l2 < 1e-6) continue;
       const cross = (n.x - pp.x) * (qq.y - n.y) - (n.y - pp.y) * (qq.x - n.x);
       const dot = (n.x - pp.x) * (qq.x - n.x) + (n.y - pp.y) * (qq.y - n.y);
-      if (Math.abs(cross) / (l1 * l2) > 0.003 || dot <= 0) continue;
+      const lpq = dist(pp, qq) || 1;
+      const off = Math.abs((qq.x - pp.x) * (n.y - pp.y) - (qq.y - pp.y) * (n.x - pp.x)) / lpq;
+      if (dot <= 0 || Math.abs(cross) / (l1 * l2) > 0.09 || (off > tolCm && Math.abs(cross) / (l1 * l2) > 0.003)) continue;
       if (wallBetween(plan, p, q)) continue;
       // w1 : p→n, w2 : n→q
       const rev1 = w1.a !== p, rev2 = w2.a !== nid;
