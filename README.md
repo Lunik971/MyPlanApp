@@ -72,7 +72,7 @@ Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre,
 
 ## Version
 
-Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.5.1 → vX dispo » : rechargez (Ctrl+F5).
+Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.5.2 → vX dispo » : rechargez (Ctrl+F5).
 
 **Ajustement des murs** : corriger une longueur répartit par défaut la différence des deux côtés du mur (réglable dans « Options » : « Des 2 côtés » ou un côté fixe). Les murs presque perpendiculaires (±15°) qui s'y accrochent se déplacent parallèlement à eux-mêmes, sans pencher. Pareil pour l'outil Mesure (« Des 2 côtés » par défaut).
 
@@ -85,3 +85,5 @@ Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Versio
 **Mur entier** : un double toucher sur un mur coupé par des cloisons sélectionne tout le mur (ou bouton « ↔ Sélectionner le mur entier » dans le panneau). Glissé, il se déplace en entier, parallèlement à lui-même. Un toucher ailleurs revient au segment seul.
 
 **Cotes déplaçables** : les mesures qui se superposent sont empilées automatiquement. Glissez le chiffre ou la ligne d'une mesure (outil Sélection) pour la rapprocher, l'éloigner ou la faire glisser le long de sa ligne ; « ↺ Position automatique » la remet en place.
+
+**Angles droits préservés au glissé** : déplacer un coin ou un T déplace en entier le mur vertical (selon dx) et le mur horizontal (selon dy) ; le bout d'un mur droit coulisse le long du mur sans le faire pencher ; un mur glissé l'est toujours en entier (suite de segments alignés). Les murs en diagonale restent libres.

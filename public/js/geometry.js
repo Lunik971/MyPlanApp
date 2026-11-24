@@ -1089,3 +1089,39 @@ export function measureDim(plan, m, S, placed) {
   placed?.push(dim);
   return dim;
 }
+
+
+// Déplacement d'un point sans casser les angles droits : 
+//  - coin / T (mur horizontal ET vertical) : dx déplace le mur vertical en entier, dy le mur horizontal en entier ;
+//  - bout d'un mur vertical (resp. horizontal) : le point coulisse le long du mur (x verrouillé, resp. y) ;
+//  - sinon : déplacement libre.
+export function nodeDragPlan(plan, nodeId, tolDeg = 6) {
+  const n = plan.nodes[nodeId];
+  const tan = Math.tan((tolDeg * Math.PI) / 180);
+  const H = [], V = [];
+  for (const w of plan.walls) {
+    if (w.a !== nodeId && w.b !== nodeId) continue;
+    const o = plan.nodes[w.a === nodeId ? w.b : w.a];
+    const dx = Math.abs(o.x - n.x), dy = Math.abs(o.y - n.y);
+    if (dy <= dx * tan) H.push(w.id); else if (dx <= dy * tan) V.push(w.id);
+  }
+  const chainNodes = (wid) => {
+    const c = wallChain(plan, wid);
+    return c ? [c.segments[0].from, ...c.segments.map((q) => q.to)] : [];
+  };
+  const out = { xNodes: [nodeId], yNodes: [nodeId], lockX: false, lockY: false, ortho: false };
+  if (H.length && V.length) {
+    out.ortho = true;
+    out.xNodes = [...new Set([nodeId, ...V.flatMap(chainNodes)])];
+    out.yNodes = [...new Set([nodeId, ...H.flatMap(chainNodes)])];
+  } else if (V.length) { out.ortho = true; out.lockX = true; }
+  else if (H.length) { out.ortho = true; out.lockY = true; }
+  return out;
+}
+
+export function moveNodeOrtho(plan, nodeId, dp, origs, tx, ty) {
+  const o = origs[nodeId];
+  const dx = dp.lockX ? 0 : tx - o.x, dy = dp.lockY ? 0 : ty - o.y;
+  for (const id of dp.xNodes) moveNode(plan, id, origs[id].x + dx, plan.nodes[id].y);
+  for (const id of dp.yNodes) moveNode(plan, id, plan.nodes[id].x, origs[id].y + dy);
+}

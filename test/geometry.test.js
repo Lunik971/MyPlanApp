@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { uid,
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, clampOpening, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, nodeDragPlan, moveNodeOrtho, clampOpening, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -461,4 +461,34 @@ test('cotes superposées : empilées automatiquement, déplaçables à la main',
   const d3 = measureDim(p, m2, 1, []);
   assert.ok(Math.abs(d3.D - 500) < 0.01, 'distance manuelle respectée');
   assert.ok(Math.abs((d3.mid.x - d3.A2.x) * d3.ux + (d3.mid.y - d3.A2.y) * d3.uy - 0.25 * d3.len) < 0.5, 'position du chiffre respectée');
+});
+
+const allAxisAligned = (p) => p.walls.every((w) => {
+  const a = p.nodes[w.a], b = p.nodes[w.b];
+  return Math.abs(a.x - b.x) < 0.2 || Math.abs(a.y - b.y) < 0.2;
+});
+
+test('déplacer un coin ne fait pas pencher les murs', () => {
+  const { p } = triplex();
+  for (const [nx, ny] of [[0, 0], [600, 300], [200, 0], [400, 300]]) {
+    const id = Object.keys(p.nodes).find((k) => p.nodes[k].x === nx && p.nodes[k].y === ny);
+    const dp = nodeDragPlan(p, id);
+    const origs = {};
+    for (const k of new Set([...dp.xNodes, ...dp.yNodes])) origs[k] = { ...p.nodes[k] };
+    moveNodeOrtho(p, id, dp, origs, nx + 37, ny + 23);
+    assert.ok(allAxisAligned(p), `murs droits après déplacement du point ${nx},${ny}`);
+    // on remet en place
+    for (const k of Object.keys(origs)) p.nodes[k] = { ...origs[k] };
+  }
+});
+
+test('le bout d’un mur droit coulisse le long du mur (pas de penchement)', () => {
+  const p = emptyPlan();
+  insertWall(p, 0, 0, 500, 0, 10);
+  const id = Object.keys(p.nodes).find((k) => p.nodes[k].x === 500);
+  const dp = nodeDragPlan(p, id);
+  assert.ok(dp.lockY);
+  moveNodeOrtho(p, id, dp, { [id]: { ...p.nodes[id] } }, 620, 80);
+  assert.equal(p.nodes[id].y, 0);
+  assert.equal(p.nodes[id].x, 620);
 });

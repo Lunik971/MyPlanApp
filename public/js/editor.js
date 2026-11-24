@@ -505,7 +505,13 @@ export class Editor {
         return;
       }
       if (h.type === 'label') { g.kind = 'pan'; return; } // toucher un chiffre sélectionne ce mur et cette face
-      if (h.type === 'node') { g.kind = 'dragNode'; g.node = h.id; g.orig = { ...this.plan.nodes[h.id] }; return; }
+      if (h.type === 'node') {
+        g.kind = 'dragNode'; g.node = h.id; g.orig = { ...this.plan.nodes[h.id] };
+        g.dp = G.nodeDragPlan(this.plan, h.id);
+        g.origs = {};
+        for (const id of new Set([...g.dp.xNodes, ...g.dp.yNodes])) g.origs[id] = { ...this.plan.nodes[id] };
+        return;
+      }
       if (h.type === 'wall') {
         // double toucher = tout le mur (suite de segments alignés) ; une fois le mur entier sélectionné, on le saisit n'importe où
         const now = performance.now();
@@ -520,7 +526,7 @@ export class Editor {
         const wi = G.wallInfo(this.plan, w);
         g.kind = 'dragWall'; g.w = w; g.n = { x: wi.nx, y: wi.ny };
         g.origA = { ...this.plan.nodes[w.a] }; g.origB = { ...this.plan.nodes[w.b] };
-        if (this.sel?.chain && multi) {
+        if (multi) { // un mur se déplace toujours en entier (suite de segments alignés) : jamais de décroché
           const ids = [ch.segments[0].from, ...ch.segments.map((s) => s.to)];
           g.chain = ids.map((id) => ({ id, o: { ...this.plan.nodes[id] } }));
         }
@@ -599,9 +605,15 @@ export class Editor {
         if (!g.moved) break;
         if (!g.snap) { this.snapshot(); g.snap = true; }
         const s = this.snap(sp, { exclude: g.node });
-        G.moveNode(plan, g.node, s.node ? s.x : s.x, s.node ? s.y : s.y);
-        this.mergeMark = s.node ? { x: s.x, y: s.y } : null;
-        g.mergeWith = s.node || null;
+        const dp = g.dp;
+        if (dp?.ortho) { // angles droits conservés : jamais de mur qui penche
+          G.moveNodeOrtho(plan, g.node, dp, g.origs, s.x, s.y);
+          this.mergeMark = null; g.mergeWith = null;
+        } else {
+          G.moveNode(plan, g.node, s.x, s.y);
+          this.mergeMark = s.node ? { x: s.x, y: s.y } : null;
+          g.mergeWith = s.node || null;
+        }
         this.relayout();
         this.draw();
         this.hooks.live?.();
