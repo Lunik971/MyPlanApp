@@ -288,9 +288,33 @@ export function moveNode(plan, id, x, y) {
 //   mode  : 'stretch' (défaut) étire la pièce : tout ce qui est au-delà de l'extrémité mobile suit,
 //                      ce qui conserve les angles droits ;
 //           'point'   ne déplace que l'extrémité mobile.
+// Étend l'ensemble de nœuds `moving` le long des murs quasi perpendiculaires à (ux,uy) (±15°).
+function growPerpendicular(plan, moving, ux, uy, stopNode) {
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const w of plan.walls) {
+      const ina = moving.has(w.a), inb = moving.has(w.b);
+      if (ina === inb) continue;
+      const a = plan.nodes[w.a], b = plan.nodes[w.b], l = dist(a, b) || 1;
+      if (Math.abs(((b.x - a.x) * ux + (b.y - a.y) * uy) / l) > 0.26) continue;
+      const other = ina ? w.b : w.a;
+      if (other === stopNode) continue;
+      moving.add(other);
+      grew = true;
+    }
+  }
+}
+
 export function setWallLength(plan, wallId, newLen, { fixed = 'a', mode = 'stretch' } = {}) {
   const w = plan.walls.find((q) => q.id === wallId);
   if (!w || !(newLen >= 1)) return false;
+  if (fixed === 'center') { // par défaut : la différence est répartie des deux côtés du mur
+    const L0 = dist(plan.nodes[w.a], plan.nodes[w.b]);
+    const half = (newLen - L0) / 2;
+    if (!(L0 + half >= 1)) return false;
+    return setWallLength(plan, wallId, L0 + half, { fixed: 'a', mode }) && setWallLength(plan, wallId, newLen, { fixed: 'b', mode });
+  }
   const [fa, mb] = fixed === 'b' ? [w.b, w.a] : [w.a, w.b];
   const pa = plan.nodes[fa], pb = plan.nodes[mb];
   const L = dist(pa, pb);
@@ -302,8 +326,13 @@ export function setWallLength(plan, wallId, newLen, { fixed = 'a', mode = 'stret
     return true;
   }
   const limit = pb.x * ux + pb.y * uy - EPS;
-  for (const n of Object.values(plan.nodes)) {
-    if (n.x * ux + n.y * uy >= limit) { n.x = round1(n.x + ux * delta); n.y = round1(n.y + uy * delta); }
+  // nœuds qui suivent : tout ce qui est au-delà, plus les murs (quasi) perpendiculaires qui s'y accrochent,
+  // pour qu'ils se déplacent parallèlement à eux-mêmes au lieu de pencher
+  const moving = new Set(Object.keys(plan.nodes).filter((id) => plan.nodes[id].x * ux + plan.nodes[id].y * uy >= limit));
+  growPerpendicular(plan, moving, ux, uy, fa);
+  for (const id of moving) {
+    const n = plan.nodes[id];
+    n.x = round1(n.x + ux * delta); n.y = round1(n.y + uy * delta);
   }
   for (const f of plan.furniture) {
     if (f.x * ux + f.y * uy >= limit) { f.x = round1(f.x + ux * delta); f.y = round1(f.y + uy * delta); }
@@ -374,6 +403,12 @@ export function wallChain(plan, wallId) {
 export function setChainLength(plan, wallId, newTotal, { fixed = 'first', distribute = 'selected', mode = 'stretch' } = {}) {
   const ch = wallChain(plan, wallId);
   if (!ch || !(newTotal >= 1)) return false;
+  if (fixed === 'center') {
+    const half = (newTotal - ch.total) / 2;
+    if (!(ch.total + half >= 1)) return false;
+    return setChainLength(plan, wallId, ch.total + half, { fixed: 'first', distribute, mode })
+      && setChainLength(plan, wallId, newTotal, { fixed: 'second', distribute, mode });
+  }
   const apply = (seg, newLen, m) => {
     const w = plan.walls.find((q) => q.id === seg.id);
     const fixedNode = fixed === 'first' ? seg.from : seg.to;
@@ -848,9 +883,16 @@ export function gapSpec(plan, A, B) {
 
 // Outil Mesure : règle la distance entre deux points en décalant tout ce qui se trouve
 // au-delà du point B (move:'b') ou en deçà du point A (move:'a').
-export function adjustMeasure(plan, A, B, newLen, { move = 'b' } = {}) {
+export function adjustMeasure(plan, A, B, newLen, { move = 'both' } = {}) {
   const L = dist(A, B);
   if (L < 1e-6 || !(newLen >= 1)) return false;
+  if (move === 'both') { // moitié de chaque côté
+    const half = (newLen - L) / 2, ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
+    if (!(L + half >= 1)) return false;
+    const B1 = { x: B.x + ux * half, y: B.y + uy * half };
+    if (!adjustMeasure(plan, A, B, L + half, { move: 'b' })) return false;
+    return adjustMeasure(plan, A, B1, newLen, { move: 'a' });
+  }
   const dx = (B.x - A.x) / L, dy = (B.y - A.y) / L, delta = newLen - L;
   const tol = (P) => {
     let t = 0;
@@ -870,7 +912,10 @@ export function adjustMeasure(plan, A, B, newLen, { move = 'b' } = {}) {
     const g = openingGeom(plan, op);
     return g ? { op, c: { ...g.c } } : null;
   }).filter(Boolean);
-  for (const o of [...Object.values(plan.nodes), ...plan.furniture, ...plan.rooms]) {
+  const moving = new Set(Object.keys(plan.nodes).filter((id) => hit(plan.nodes[id])));
+  growPerpendicular(plan, moving, dx, dy, null);
+  for (const id of moving) { const o = plan.nodes[id]; o.x = round1(o.x + dx * k); o.y = round1(o.y + dy * k); }
+  for (const o of [...plan.furniture, ...plan.rooms]) {
     if (hit(o)) { o.x = round1(o.x + dx * k); o.y = round1(o.y + dy * k); }
   }
   for (const { op, c } of centers) {

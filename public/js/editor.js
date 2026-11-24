@@ -804,7 +804,7 @@ export class Editor {
   }
 
   // Modifier une mesure conservée (outil Sélection) : même logique que la saisie de l'outil Mesure
-  applySelectedMeasure(len, move = 'b') {
+  applySelectedMeasure(len, move = 'both') {
     const mm = this.sel?.type === 'measure' ? this.selected : null;
     const e = mm && G.measureEnds(this.plan, mm);
     if (!e || !(len >= 1)) return false;
@@ -830,7 +830,7 @@ export class Editor {
   }
 
   // Saisie de la cote : décale ce qui est au-delà de B (ou en deçà de A), puis verrouille
-  applyMeasure(len, move = 'b') {
+  applyMeasure(len, move = 'both') {
     const m = this.meas;
     if (!m?.B || !(len >= 1)) return false;
     const spec = m.id ? { kind: 'measure', measure: m.id } : null;
@@ -839,7 +839,11 @@ export class Editor {
     this.snapshot();
     if (!G.adjustMeasure(this.plan, m.A, m.B, len, { move })) { this.undoStack.pop(); return false; }
     if (!this.guardLocks(ex?.id, () => this.applyMeasure(len, move))) return false;
-    if (move === 'a') m.A = { ...m.A, x: G.round1(m.B.x - dx * len), y: G.round1(m.B.y - dy * len) };
+    if (move === 'both') {
+      const h2 = (len - L) / 2;
+      m.A = { ...m.A, x: G.round1(m.A.x - dx * h2), y: G.round1(m.A.y - dy * h2) };
+      m.B = { ...m.B, x: G.round1(m.B.x + dx * h2), y: G.round1(m.B.y + dy * h2) };
+    } else if (move === 'a') m.A = { ...m.A, x: G.round1(m.B.x - dx * len), y: G.round1(m.B.y - dy * len) };
     else m.B = { ...m.B, x: G.round1(m.A.x + dx * len), y: G.round1(m.A.y + dy * len) };
     if (spec) G.upsertLock(this.plan, { ...spec, len }); // une cote saisie est verrouillée
     this.afterChange();

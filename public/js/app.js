@@ -214,7 +214,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && dir
 
 // ───────────────────────── éditeur ─────────────────────────
 
-const prefs = { wallFix: 'first', wallMode: 'stretch', chainDist: 'selected' };
+const prefs = { wallFix: 'center', wallMode: 'stretch', chainDist: 'selected' };
 let panelKey = '', panelSync = [];
 
 function ensureEditor() {
@@ -391,7 +391,7 @@ function onDraft(d) {
 
 // ───────────────────────── barre « ouverture » ─────────────────────────
 
-const measPrefs = { move: 'b' };
+const measPrefs = { move: 'both' };
 let measKey = '';
 function buildMeasBar() {
   const bar = $('#measbar');
@@ -418,7 +418,7 @@ function buildMeasBar() {
       h('button', { class: 'chip' + (info.locked ? ' on' : ''), onclick: () => editor.toggleMeasureLock() }, info.locked ? '🔒 Verrouillée' : info.lockable ? '🔓 Verrouiller' : '🔓 Libre'),
       h('button', { class: 'chip', onclick: () => editor.resetMeasure() }, 'Nouvelle'),
       h('button', { class: 'chip', title: 'Retirer cette mesure du plan', onclick: () => editor.removeActiveMeasure() }, '🗑')),
-    h('div', { class: 'row tight' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
+    h('div', { class: 'row tight' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['both', 'Des 2 côtés'], ['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
     info.lockable ? null : h('p', { class: 'note' }, 'Points libres : la cote règle la distance mais ne peut pas être verrouillée.'),
   );
 }
@@ -523,12 +523,12 @@ function wallPanel() {
   const apply = (v) => {
     const w = cur(); const { firstIsA } = sideLabels(w);
     const keepFirst = prefs.wallFix === 'first';
-    const fixed = keepFirst === firstIsA ? 'a' : 'b';
+    const fixed = prefs.wallFix === 'center' ? 'center' : keepFirst === firstIsA ? 'a' : 'b';
     editor.applyWallLength(v, { fixed, mode: prefs.wallMode });
   };
   const applyChain = (v) => editor.applyChainLength(v, { fixed: prefs.wallFix, distribute: prefs.chainDist, mode: prefs.wallMode });
   const fixSeg = h('span');
-  const renderFix = () => { fixSeg.innerHTML = ''; const [l1, l2] = labels(); fixSeg.append(seg([['first', l1], ['second', l2]], () => prefs.wallFix, (v) => { prefs.wallFix = v; })); };
+  const renderFix = () => { fixSeg.innerHTML = ''; const [l1, l2] = labels(); fixSeg.append(seg([['center', 'Des 2 côtés'], ['first', l1 + ' fixe'], ['second', l2 + ' fixe']], () => prefs.wallFix, (v) => { prefs.wallFix = v; })); };
   renderFix();
   panelSync.push(renderFix);
   const thick = h('div', { class: 'chips' });
@@ -548,7 +548,7 @@ function wallPanel() {
   const lockBtn = (on, onClick, title) => h('button', { class: 'chip icon' + (on ? ' on' : ''), title, 'aria-label': title, onclick: onClick }, on ? '🔒' : '🔓');
   const more = h('details', { class: 'more' }, h('summary', {}, 'Options'),
     distSeg,
-    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Garder fixe :'), fixSeg),
+    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Ajuster :'), fixSeg),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Correction :'), seg([['stretch', 'Étirer la pièce'], ['point', 'Ce point seul']], () => prefs.wallMode, (v) => { prefs.wallMode = v; })),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Épaisseur (cm) :'), thick),
     h('p', { class: 'note' }, textBind(() => `Mesure ${face.nodeValue}. Une cote saisie est verrouillée automatiquement. Étirer garde les angles droits. Surfaces calculées à l’intérieur.`)),
@@ -593,7 +593,7 @@ function measurePanel() {
   return h('div', {},
     panelHead('Mesure', h('span', { class: 'muted' }, textBind(() => G.fmtLen(len())))),
     h('div', { class: 'row' }, field('Cote', len, (v) => editor.applySelectedMeasure(v, measPrefs.move), { min: 1 })),
-    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
+    h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['both', 'Des 2 côtés'], ['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
     h('div', { class: 'row' }, h('button', { class: 'chip' + (isLk() ? ' on' : ''), onclick: () => { editor.toggleSelectedMeasureLock(); refreshPanel(true); } }, isLk() ? '🔒 Verrouillée' : '🔓 Verrouiller')),
     h('p', { class: 'note' }, 'Mesure conservée et verrouillée : elle suit les murs, et une modification qui la ferait changer est refusée. Tapez une nouvelle cote pour la corriger (le verrou est mis à jour) ; 🗑 la supprime.'));
 }
