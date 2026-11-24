@@ -109,6 +109,19 @@ export class Editor {
     const prev = G.normalizePlan(JSON.parse(prevJson));
     const bad = G.brokenLocks(prev, this.plan, ignoreIds);
     if (!bad) return true;
+    const attempted = JSON.stringify(this.plan);
+    if (!retry) { // glisser un mur / un point, épaisseur… : on rejoue l'état refusé une fois la cote déverrouillée
+      const replay = () => {
+        this.snapshot();
+        const next = G.normalizePlan(JSON.parse(attempted));
+        const keep = new Set((this.plan.locks || []).map((l) => l.id));
+        next.locks = (next.locks || []).filter((l) => keep.has(l.id)); // cotes déverrouillées entre-temps
+        this.plan = next;
+        if (!this.guardLocks(undefined, replay)) return;
+        this.afterChange();
+      };
+      retry = replay;
+    }
     this.undoStack.pop();
     this.plan = prev;
     this.afterChange();

@@ -155,13 +155,25 @@ try {
   await page.click('text=Déverrouiller et appliquer');
   const h1 = await ev(() => { const ns = Object.values(window.__app.editor.plan.nodes); return Math.max(...ns.map((n) => n.y)) - Math.min(...ns.map((n) => n.y)); });
   ok(h1 - h0 >= 99.4 && h1 - h0 <= 110.6, `« Déverrouiller et appliquer » applique la modification (${h0} → ${h1})`);
+  const thick = await ev(() => {
+    const e = window.__app.editor;
+    const lk = e.plan.locks.find((l) => l.kind === 'wall');
+    const w = e.plan.walls.find((q) => q.id === lk.wall);
+    const x0 = e.plan.nodes[w.b].x;
+    e.mutate((p) => { p.nodes[w.b].x += 40; }); // comme un glissement de point
+    return { id: w.id, b: w.b, x0 };
+  });
+  await page.waitForSelector('text=Déverrouiller et appliquer');
+  await page.click('text=Déverrouiller et appliquer');
+  const x1 = await ev((id) => window.__app.editor.plan.nodes[id].x, thick.b);
+  ok(Math.abs(x1 - thick.x0 - 40) < 0.5, `modification (glissement) rejouée après déverrouillage (${thick.x0} → ${x1})`);
 
   await page.click('#btn-menu');
   await page.click('text=Cotes verrouillées');
   await page.waitForSelector('.lock-item');
   await page.screenshot({ path: shots + '/locks.png' });
   const nLocks = await page.locator('.lock-item').count();
-  ok(nLocks >= 2, `fenêtre des cotes verrouillées (${nLocks})`);
+  ok(nLocks >= 1, `fenêtre des cotes verrouillées (${nLocks})`);
   await page.click('text=Verrouillées seulement');
   ok(await ev(() => window.__app.editor.plan.settings.dimsShow === 'locked'), 'affichage limité aux cotes verrouillées');
   await page.click('text=Toutes les cotes');
