@@ -11,6 +11,7 @@
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/icon-180.png">
   <title>Plan appart</title>
+  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js","three/addons/":"/vendor/three-addons/"}}</script>
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
@@ -50,7 +51,9 @@
     </header>
     <div id="stage">
       <canvas id="cv"></canvas>
+      <div id="v3" hidden></div>
       <div id="zoombar">
+        <button id="z-3d" aria-label="Basculer entre vue 2D et 3D" title="Vue 3D" class="toggle">3D</button>
         <button id="z-in" aria-label="Zoom +">＋</button>
         <button id="z-out" aria-label="Zoom −">－</button>
         <button id="z-fit" aria-label="Tout voir">⤢</button>

@@ -211,3 +211,10 @@ select.thick { height: 36px; width: auto; flex: 1; min-width: 0; padding: 0 6px;
 .lock-item { display: flex; gap: 8px; align-items: center; }
 .lock-main { flex: 1; text-align: left; border: 1.5px solid var(--line); background: #fff; border-radius: 12px; min-height: 44px; padding: 0 12px; font-size: .95rem; }
 .btn.danger-soft { width: 100%; background: #fff5f5; color: #b42318; border: 1.5px solid #f4c7c3; }
+
+/* vue 3D */
+#v3 { position: absolute; inset: 0; z-index: 1; background: #eef2f7; }
+#v3bar { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 0 8px; z-index: 3; }
+#v3bar .seg { background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.18); }
+body.mode3d #dock, body.mode3d #tools, body.mode3d #z-in, body.mode3d #z-out, body.mode3d #z-dims { display: none; }
+body.mode3d #z-3d { background: var(--blue); color: #fff; border-color: var(--blue); }

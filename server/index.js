@@ -180,6 +180,11 @@ app.delete('/api/plans/:id', requireAuth, (req, res) => {
 app.use('/api', (req, res) => res.status(404).json({ error: 'Introuvable' }));
 
 // ───────────── fichiers statiques (PWA) ─────────────
+// three.js servi localement (pas de CDN) : vue 3D
+const THREE_DIR = path.join(__dirname, '..', 'node_modules', 'three');
+app.use('/vendor/three', express.static(path.join(THREE_DIR, 'build'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+app.use('/vendor/three-addons', express.static(path.join(THREE_DIR, 'examples', 'jsm'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   extensions: ['html'],
   setHeaders(res, file) {

@@ -72,7 +72,7 @@ Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre,
 
 ## Version
 
-Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.6.0 → vX dispo » : rechargez (Ctrl+F5).
+Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.7.1 → vX dispo » : rechargez (Ctrl+F5).
 
 **Ajustement des murs** : corriger une longueur répartit par défaut la différence des deux côtés du mur (réglable dans « Options » : « Des 2 côtés » ou un côté fixe). Les murs presque perpendiculaires (±15°) qui s'y accrochent se déplacent parallèlement à eux-mêmes, sans pencher. Pareil pour l'outil Mesure (« Des 2 côtés » par défaut).
 
@@ -93,3 +93,7 @@ Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Versio
 **Rattrapage automatique au tracé** : après chaque mur tracé, les petits décalages (≤ 4° / quelques cm) sont alignés tout seuls et les points quasi confondus (< 1,5 cm) fusionnés, sans toucher aux cotes verrouillées. L'alignement sur les points existants est plus large (12 px).
 
 **Agrandir vers l'extérieur** : par défaut (« Options → Ajuster → Vers l'extérieur » et outil Mesure), le bout du mur le plus éloigné du centre du bâtiment est celui qui avance ; le côté proche du centre reste fixe. Les autres choix restent disponibles : des 2 côtés, ou un côté fixe.
+
+## Vue 3D
+
+Bouton **3D** (en haut à droite de l'éditeur) : murs extrudés avec portes (vantail ouvert), fenêtres, arches, sols colorés par pièce avec nom et surface, meubles en volume. Glisser = tourner, pincer = zoom, deux doigts = déplacer. « Perspective / Dessus » et « Murs entiers / Murs bas » (coupe pour voir l'intérieur). La hauteur sous plafond se règle dans Réglages du plan. three.js est servi localement par le serveur (`/vendor/three`), aucun CDN.

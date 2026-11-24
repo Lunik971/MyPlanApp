@@ -28,7 +28,7 @@ const canvasBox = async () => (await page.locator('#cv').boundingBox());
 // recadre la vue sur une zone fixe (au-dessus du panneau d'outils) pour des clics reproductibles
 async function refit() {
   await page.waitForTimeout(250);
-  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 620, y1: 480 }));
+  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 760, y1: 560 }));
 }
 async function tapPlan(x, y) {
   const sp = await ev(([x, y]) => window.__app.editor.toScreen({ x, y }), [x, y]);
@@ -279,6 +279,23 @@ try {
     await ev(() => window.__app.editor.undo());
   }
 
+  console.log('Vue 3D');
+  await page.click('#z-3d');
+  await page.waitForSelector('#v3 canvas', { timeout: 15000 });
+  await page.waitForTimeout(1200);
+  const v3ok = await ev(() => { const c = document.querySelector('#v3 canvas'); return { w: c.width, h: c.height, vis: getComputedStyle(document.querySelector('#v3')).display !== 'none' }; });
+  ok(v3ok.vis && v3ok.w > 100, `la vue 3D s'affiche (${v3ok.w}×${v3ok.h})`);
+  await page.screenshot({ path: `${shots}/7-3d.png` });
+  await page.click('text=Dessus');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${shots}/7b-3d-dessus.png` });
+  await page.click('text=Murs bas');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${shots}/7c-3d-bas.png` });
+  await page.click('#z-3d');
+  await page.waitForFunction(() => !document.body.classList.contains('mode3d'));
+  ok(true, 'retour à la vue 2D');
+
   console.log('Nom de pièce & meuble');
   await refit();
   await tapPlan(120, 200);
@@ -341,7 +358,7 @@ try {
   // tracé au doigt : pose d'un point puis d'un autre avec des vrais événements tactiles
   await ev(() => window.__app.editor.setTool('wall'));
   await page.waitForTimeout(250);
-  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 620, y1: 480 }));
+  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 760, y1: 560 }));
   const tt = async (x, y) => { const sp = await ev(([x, y]) => window.__app.editor.toScreen({ x, y }), [x, y]); await touch('touchStart', [[b0.x + sp.x, b0.y + sp.y]]); await touch('touchEnd', []); };
   await tt(600, 100); await tt(600, 300);
   const added = await ev(() => window.__app.editor.plan.walls.length);
@@ -351,7 +368,7 @@ try {
   console.log('Clic droit = quitter le mode en cours');
   await ev(() => window.__app.editor.setTool('wall'));
   await page.waitForTimeout(250);
-  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 620, y1: 480 }));
+  await ev(() => window.__app.editor.fit({ x0: -60, y0: -60, x1: 760, y1: 560 }));
   await tapPlan(100, 450);
   const bx = await canvasBox();
   await page.mouse.click(bx.x + 150, bx.y + 150, { button: 'right' });

@@ -113,6 +113,7 @@ async function logout() {
 const fmtDate = (ts) => new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 
 async function showPlans() {
+  exit3d();
   closeSheets();
   show('plans');
   try { state.plans = await api('GET', '/api/plans'); } catch (e) { if (e.status === 401) return; toast('Impossible de charger les plans'); }
@@ -281,7 +282,41 @@ $('#btn-undo').addEventListener('click', () => editor.undo());
 $('#btn-redo').addEventListener('click', () => editor.redo());
 $('#z-in').addEventListener('click', () => editor.zoomAt({ x: editor.W / 2, y: editor.H / 2 }, 1.3));
 $('#z-out').addEventListener('click', () => editor.zoomAt({ x: editor.W / 2, y: editor.H / 2 }, 1 / 1.3));
-$('#z-fit').addEventListener('click', () => editor.fit());
+$('#z-fit').addEventListener('click', () => (mode3d ? v3?.perspective() : editor.fit()));
+
+// ───────────────────────── vue 3D ─────────────────────────
+let v3 = null, mode3d = false;
+async function enter3d() {
+  if (mode3d) return;
+  editor.select(null); editor.setTool('select');
+  if (!v3) {
+    let mod;
+    try { mod = await import('./view3d.js'); } catch (e) { console.error(e); toast('Vue 3D indisponible (chargement impossible)'); return; }
+    v3 = await mod.createView3D($('#v3'));
+    if (!v3) { toast('Vue 3D indisponible sur cet appareil'); return; }
+    const state = { view: 'persp' };
+    const bar = h('div', { id: 'v3bar' },
+      seg([['persp', 'Perspective'], ['top', 'Dessus']], () => state.view, (v) => { state.view = v; if (v === 'top') v3.top(); else v3.perspective(); }),
+      seg([['full', 'Murs entiers'], ['low', 'Murs bas']], () => v3.wallMode, (v) => v3.setWallMode(v)));
+    $('#v3').append(bar);
+  }
+  mode3d = true;
+  document.body.classList.add('mode3d');
+  $('#cv').style.visibility = 'hidden';
+  v3.show(editor.plan, editor.layout);
+  $('#z-3d').classList.add('on');
+  hint('Glissez pour tourner, pincez pour zoomer, deux doigts pour déplacer', 5000);
+}
+function exit3d() {
+  if (!mode3d) return;
+  mode3d = false;
+  v3?.hide();
+  document.body.classList.remove('mode3d');
+  $('#cv').style.visibility = '';
+  $('#z-3d').classList.remove('on');
+  window.dispatchEvent(new Event('resize'));
+}
+$('#z-3d').addEventListener('click', () => (mode3d ? exit3d() : enter3d()));
 $('#z-dims').addEventListener('click', (e) => {
   const on = !editor.plan.settings.dims;
   editor.setSetting('dims', on);
@@ -760,6 +795,7 @@ function settingsSheet() {
   openSheet('Réglages du plan', h('div', {},
     h('p', { class: 'cat-title' }, 'Pas d’accrochage des points'), grid,
     h('p', { class: 'cat-title' }, 'Cotes sur les murs'), dims,
+    h('p', { class: 'cat-title' }, 'Hauteur sous plafond (vue 3D)'), (() => { const box = h('div', { class: 'chips' }); const rh = () => { box.innerHTML = ''; for (const v of [240, 250, 260, 270, 300]) box.append(h('button', { class: 'chip' + ((s.wallH || 250) === v ? ' on' : ''), onclick: () => { editor.setSetting('wallH', v); markDirty(); rh(); } }, `${v} cm`)); }; rh(); return box; })(),
     h('p', { class: 'cat-title' }, 'Cotes prises à…'), seg(REFS, () => editor.dimRef, (v) => { editor.setSetting('dimRef', v); markDirty(); }),
     h('p', { class: 'note' }, 'L’épaisseur des nouveaux murs se règle dans l’outil « Mur ».')));
 }
