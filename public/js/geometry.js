@@ -278,6 +278,58 @@ export function mergeNodes(plan, keep, remove) {
   pruneNodes(plan);
 }
 
+// Nettoyage : supprime les décrochés et fusionne les points quasi confondus, puis redresse les murs presque
+// horizontaux / verticaux (écart d'angle ≤ angleDeg) en alignant leurs points.
+export function cleanPlan(plan, { angleDeg = 5, shortCm = 8, snapCm = 3 } = {}) {
+  const stats = { merged: 0, straightened: 0 };
+  const hasOpening = (id) => plan.openings.some((o) => o.wall === id);
+  // 1) murs minuscules (décrochés) et points quasi confondus
+  for (let guard = 0; guard < 200; guard++) {
+    let target = null;
+    for (const w of plan.walls) {
+      const a = plan.nodes[w.a], b = plan.nodes[w.b];
+      if (a && b && dist(a, b) < shortCm && !hasOpening(w.id)) { target = [w.a, w.b]; break; }
+    }
+    if (!target) {
+      const ids = Object.keys(plan.nodes);
+      outer: for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          if (dist(plan.nodes[ids[i]], plan.nodes[ids[j]]) < snapCm) { target = [ids[i], ids[j]]; break outer; }
+        }
+      }
+    }
+    if (!target) break;
+    const [k, r] = target, A = plan.nodes[k], B = plan.nodes[r];
+    plan.nodes[k] = { x: round1((A.x + B.x) / 2), y: round1((A.y + B.y) / 2) };
+    mergeNodes(plan, k, r);
+    stats.merged++;
+  }
+  // 2) murs presque droits : aligner les points reliés
+  const tan = Math.tan((angleDeg * Math.PI) / 180);
+  for (const axis of ['x', 'y']) {
+    const other = axis === 'x' ? 'y' : 'x';
+    const parent = {};
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    for (const id of Object.keys(plan.nodes)) parent[id] = id;
+    for (const w of plan.walls) {
+      const a = plan.nodes[w.a], b = plan.nodes[w.b];
+      const along = Math.abs(b[other] - a[other]), across = Math.abs(b[axis] - a[axis]);
+      // presque vertical (axis = x) : variation de x faible par rapport à celle de y
+      if (across > 0.05 && across <= along * tan) parent[find(w.a)] = find(w.b);
+    }
+    const groups = {};
+    for (const id of Object.keys(plan.nodes)) (groups[find(id)] ||= []).push(id);
+    for (const ids of Object.values(groups)) {
+      if (ids.length < 2) continue;
+      const m = round1(ids.reduce((s, id) => s + plan.nodes[id][axis], 0) / ids.length);
+      for (const id of ids) if (Math.abs(plan.nodes[id][axis] - m) > 0.05) { plan.nodes[id][axis] = m; stats.straightened++; }
+    }
+  }
+  mergeCollinear(plan);
+  for (const o of plan.openings) clampOpening(plan, o);
+  return stats;
+}
+
 export function moveNode(plan, id, x, y) {
   const n = plan.nodes[id];
   if (n) { n.x = round1(x); n.y = round1(y); }

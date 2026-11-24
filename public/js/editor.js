@@ -1060,6 +1060,20 @@ export class Editor {
     this.select(null);
   }
 
+  // Redresse les murs presque droits et supprime les décrochés (annulable)
+  cleanPlan() {
+    this.snapshot();
+    const st = G.cleanPlan(this.plan);
+    if (!st.merged && !st.straightened) { this.undoStack.pop(); this.hooks.history?.(); this.hooks.toast?.('Le plan est déjà propre'); return st; }
+    const lay = G.computeLayout(this.plan);
+    const before = (this.plan.locks || []).length;
+    this.plan.locks = (this.plan.locks || []).filter((l) => { const v = G.lockValue(this.plan, lay, l); return v != null && Math.abs(v - l.len) <= 0.5; });
+    st.unlocked = before - this.plan.locks.length;
+    this.afterChange();
+    this.hooks.toast?.(`✨ ${st.straightened} point${st.straightened > 1 ? 's' : ''} aligné${st.straightened > 1 ? 's' : ''}, ${st.merged} décroché${st.merged > 1 ? 's' : ''} supprimé${st.merged > 1 ? 's' : ''}${st.unlocked ? ` · ${st.unlocked} cote(s) verrouillée(s) levée(s)` : ''}`);
+    return st;
+  }
+
   setRoom(patch) {
     const r = this.selected;
     if (this.sel?.type !== 'room' || !r) return;

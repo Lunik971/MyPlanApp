@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { uid,
   emptyPlan, insertWall, computeRooms, setWallLength, parseLen, addOpening, removeWall,
-  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
+  mergeCollinear, setRoomMeta, wallChain, setChainLength, computeLayout, resolveSide, dimLabels, chainMeasure, setWallFaceLength, setChainFaceLength, sideEntry, cleanPlan, removeMeasure, addMeasure, measureEnds, measureDim, adjustMeasure, gapSpec, upsertLock, findLock, brokenLocks, normalizePlan, fmtArea, fmtLen, pointInFurniture, wallInfo, openingGeom, mergeNodes,
 } from '../public/js/geometry.js';
 
 function rect(plan, x, y, w, h, t = 10) {
@@ -397,4 +397,20 @@ test('ajustement par défaut des deux côtés : le mur grandit de moitié à cha
   const ys = Object.values(p.nodes).map((q) => q.y);
   assert.equal(Math.min(...ys), -50);
   assert.equal(Math.max(...ys), 350);
+});
+
+test('nettoyage : décroché de 4 cm et mur de travers redressés', () => {
+  const p = emptyPlan();
+  const n = (x, y) => { const id = uid('n'); p.nodes[id] = { x, y }; return id; };
+  // mur de droite avec un décroché de 4 cm, mur du bas légèrement de travers
+  const a = n(0, 0), b = n(400, 0), c = n(400, 150), d = n(404, 152), e = n(404, 300), f = n(0, 285);
+  for (const [u, v] of [[a, b], [b, c], [c, d], [d, e], [e, f], [f, a]]) p.walls.push({ id: uid('w'), a: u, b: v, t: 10 });
+  const st = cleanPlan(p);
+  assert.ok(st.merged >= 1, 'décroché supprimé');
+  const xs = Object.values(p.nodes).map((q) => q.x);
+  assert.ok(xs.filter((x) => x > 100).every((x) => x === xs.filter((y) => y > 100)[0]), 'mur de droite aligné');
+  const left = Object.values(p.nodes).filter((q) => q.x < 100);
+  assert.ok(left.every((q) => q.x === left[0].x), 'mur de gauche vertical');
+  const ys = Object.values(p.nodes).filter((q) => q.y > 200).map((q) => q.y);
+  assert.ok(ys.every((y) => y === ys[0]), 'mur du bas horizontal');
 });

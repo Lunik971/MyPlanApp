@@ -766,6 +766,7 @@ $('#btn-menu').addEventListener('click', () => {
     h('button', { onclick: () => { sh.close(); roomsSheet(); } }, h('span', { class: 'ico' }, '▦'), 'Surfaces par pièce'),
     h('button', { onclick: () => { sh.close(); exportImage(); } }, h('span', { class: 'ico' }, '🖼'), 'Exporter en image (PNG)'),
     h('button', { onclick: () => { sh.close(); locksSheet(); } }, h('span', { class: 'ico' }, '🔒'), `Cotes verrouillées (${(editor.plan.locks || []).length})`),
+    h('button', { onclick: () => { sh.close(); editor.cleanPlan(); markDirty(); } }, h('span', { class: 'ico' }, '✨'), 'Redresser et nettoyer le plan'),
     h('button', { onclick: () => { sh.close(); settingsSheet(); } }, h('span', { class: 'ico' }, '⚙'), 'Réglages du plan'),
     h('button', { onclick: async () => { sh.close(); await flushSave(); const r = await api('POST', `/api/plans/${state.plan.id}/duplicate`); toast('Copie créée — ouverte'); location.hash = `#/plan/${r.id}`; } }, h('span', { class: 'ico' }, '⎘'), 'Dupliquer ce plan'),
     installItem(),
