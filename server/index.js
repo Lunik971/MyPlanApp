@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db } from './db.js';
@@ -107,6 +108,9 @@ function cleanSummary(s) {
 function validPlanData(d) {
   return d && typeof d === 'object' && !Array.isArray(d) && typeof d.nodes === 'object' && Array.isArray(d.walls);
 }
+
+const APP_VERSION = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).version;
+app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 app.get('/api/plans', requireAuth, (req, res) => {
   const s = scope(req);

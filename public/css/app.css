@@ -204,3 +204,5 @@ select.thick { height: 36px; width: auto; flex: 1; min-width: 0; padding: 0 6px;
 .more[open] > summary::before { content: '▾ '; }
 .more .row { margin: 5px 0; }
 .panel-head { margin-bottom: 4px; }
+
+#ver { position: fixed; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 1px); font-size: .62rem; color: #8a94a3; pointer-events: none; z-index: 50; letter-spacing: .02em; text-shadow: 0 0 3px #fff; }

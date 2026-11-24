@@ -1,4 +1,5 @@
 import * as G from './geometry.js';
+import { VERSION } from './version.js';
 import { Editor } from './editor.js';
 import { ROOM_COLORS } from './render.js';
 
@@ -733,10 +734,19 @@ $('#btn-menu').addEventListener('click', () => {
     h('button', { onclick: () => { sh.close(); settingsSheet(); } }, h('span', { class: 'ico' }, '⚙'), 'Réglages du plan'),
     h('button', { onclick: async () => { sh.close(); await flushSave(); const r = await api('POST', `/api/plans/${state.plan.id}/duplicate`); toast('Copie créée — ouverte'); location.hash = `#/plan/${r.id}`; } }, h('span', { class: 'ico' }, '⎘'), 'Dupliquer ce plan'),
     installItem(),
+    h('p', { class: 'note ver-note' }, textBind(() => `Version ${VERSION}${serverVersion && serverVersion !== VERSION ? ` — serveur ${serverVersion} : rechargez (Ctrl+F5)` : ''}`)),
     h('hr'),
     h('button', { class: 'danger', onclick: async () => { if (!confirm(`Supprimer « ${state.plan.name} » définitivement ?`)) return; sh.close(); dirty = false; const id = state.plan.id; await api('DELETE', `/api/plans/${id}`); try { localStorage.removeItem(`pa:${id}`); } catch { /* ignore */ } location.hash = ''; } }, h('span', { class: 'ico' }, '🗑'), 'Supprimer ce plan'),
     h('button', { class: 'danger', onclick: () => { sh.close(); logout(); } }, h('span', { class: 'ico' }, '⏻'), 'Se déconnecter')));
 });
+
+// ───────────────────────── version ─────────────────────────
+let serverVersion = '';
+$('#ver').textContent = 'v' + VERSION;
+fetch('/api/version').then((r) => r.json()).then((j) => {
+  serverVersion = j.version || '';
+  if (serverVersion && serverVersion !== VERSION) $('#ver').textContent = `v${VERSION} → v${serverVersion} dispo`;
+}).catch(() => {});
 
 // ───────────────────────── démarrage ─────────────────────────
 
