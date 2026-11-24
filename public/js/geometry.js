@@ -500,7 +500,7 @@ export const OPENING_KINDS = {
 
 // Distance, le long du mur w, entre un de ses nœuds et la face des autres murs qui s'y rejoignent :
 // une ouverture ne doit pas entamer ces murs (sa limite est le mur, pas l'intérieur du mur voisin).
-function endInset(plan, w, nodeId) {
+export function endInset(plan, w, nodeId) {
   const here = plan.nodes[nodeId];
   const far = plan.nodes[w.a === nodeId ? w.b : w.a];
   const L = dist(here, far) || 1;

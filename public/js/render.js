@@ -1,5 +1,5 @@
 // Rendu 2D du plan sur un canvas. Aucune mutation du plan ici.
-import { measureDim, openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo, dimLabels, resolveSide, wallChain } from './geometry.js';
+import { endInset, measureDim, openingGeom, furnitureCorners, fmtLen, fmtArea, wallInfo, dimLabels, resolveSide, wallChain } from './geometry.js';
 
 export const ROOM_COLORS = ['#e8f0fb', '#e4f4e8', '#fdf0dc', '#fbe6ec', '#ece6fa', '#dff3f5', '#f5f0d2', '#eceff1'];
 const DEFAULT_ROOM = '#f6f8fb';
@@ -246,14 +246,36 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
   lctx.setTransform(ctx.getTransform());
   lctx.lineCap = 'square'; lctx.lineJoin = 'miter';
   const ow = Math.max(1.1, Math.min(1.8, S * 4)); // épaisseur du trait de contour (px)
+  // Chaque mur est un rectangle dont les bouts ne dépassent que de la demi-épaisseur des murs qui s'y
+  // rejoignent (angles remplis, mais aucun bout qui déborde d'un mur plus fin) ; bout libre : coupe franche.
+  const wallPoly = (w) => {
+    const a = plan.nodes[w.a], b = plan.nodes[w.b];
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L, nx = -uy, ny = ux;
+    // en T (le nœud est au milieu d'un autre mur), le bout se cache dans ce mur sans déborder de son contour
+    const through = (nid) => {
+      const dirs = plan.walls.filter((q) => q !== w && (q.a === nid || q.b === nid)).map((q) => {
+        const o = plan.nodes[q.a === nid ? q.b : q.a], n0 = plan.nodes[nid], l = Math.hypot(o.x - n0.x, o.y - n0.y) || 1;
+        return [(o.x - n0.x) / l, (o.y - n0.y) / l];
+      });
+      return dirs.some((d1, i) => dirs.some((d2, j) => j > i && d1[0] * d2[0] + d1[1] * d2[1] < -0.98));
+    };
+    const trim = (nid) => { const e = endInset(plan, w, nid); return through(nid) ? Math.max(0, e - (ow * 2 + 1.5) / S) : e; };
+    const ea = trim(w.a), eb = trim(w.b);
+    const half = Math.max(w.t, 2.2 / S) / 2;
+    const A = { x: a.x - ux * ea, y: a.y - uy * ea }, B = { x: b.x + ux * eb, y: b.y + uy * eb };
+    return [[A.x + nx * half, A.y + ny * half], [B.x + nx * half, B.y + ny * half], [B.x - nx * half, B.y - ny * half], [A.x - nx * half, A.y - ny * half]];
+  };
+  const polys = plan.walls.filter((w) => plan.nodes[w.a] && plan.nodes[w.b]).map(wallPoly);
+  lctx.lineJoin = 'miter';
   for (const pass of [0, 1]) {
-    lctx.strokeStyle = pass === 0 ? WALL_LINE : WALL_FILL;
-    for (const w of plan.walls) {
-      const a = plan.nodes[w.a], b = plan.nodes[w.b];
-      if (!a || !b) continue;
-      const base = Math.max(w.t * S, 2.2);
-      lctx.lineWidth = pass === 0 ? base + ow * 2 : base;
-      lctx.beginPath(); lctx.moveTo(X(a.x), Y(a.y)); lctx.lineTo(X(b.x), Y(b.y)); lctx.stroke();
+    lctx.fillStyle = pass === 0 ? WALL_LINE : WALL_FILL;
+    lctx.strokeStyle = WALL_LINE; lctx.lineWidth = ow * 2;
+    for (const pg of polys) {
+      lctx.beginPath();
+      pg.forEach(([x, y], i) => (i ? lctx.lineTo(X(x), Y(y)) : lctx.moveTo(X(x), Y(y))));
+      lctx.closePath();
+      if (pass === 0) { lctx.fill(); lctx.stroke(); } else lctx.fill();
     }
   }
   lctx.globalCompositeOperation = 'destination-out';
