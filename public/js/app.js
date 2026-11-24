@@ -597,7 +597,8 @@ function measurePanel() {
     h('div', { class: 'row' }, field('Cote', len, (v) => editor.applySelectedMeasure(v, measPrefs.move), { min: 1 })),
     h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Déplacer :'), seg([['both', 'Des 2 côtés'], ['b', 'Côté 2e point'], ['a', 'Côté 1er point']], () => measPrefs.move, (v) => { measPrefs.move = v; })),
     h('div', { class: 'row' }, h('button', { class: 'chip' + (isLk() ? ' on' : ''), onclick: () => { editor.toggleSelectedMeasureLock(); refreshPanel(true); } }, isLk() ? '🔒 Verrouillée' : '🔓 Verrouiller')),
-    h('p', { class: 'note' }, 'Mesure conservée et verrouillée : elle suit les murs, et une modification qui la ferait changer est refusée. Tapez une nouvelle cote pour la corriger (le verrou est mis à jour) ; 🗑 la supprime.'));
+    h('div', { class: 'row' }, h('button', { class: 'chip', onclick: () => { editor.resetMeasurePlacement(); } }, '↺ Position automatique')),
+    h('p', { class: 'note' }, 'Glissez le chiffre ou la ligne pour déplacer la cote. Mesure conservée et verrouillée : elle suit les murs, et une modification qui la ferait changer est refusée. Tapez une nouvelle cote pour la corriger (le verrou est mis à jour) ; 🗑 la supprime.'));
 }
 
 function furniturePanel() {

@@ -445,3 +445,20 @@ test('un vrai coude (10°) n’est pas fusionné', () => {
   insertWall(p, 300, 0, 600, 52, 10);
   assert.equal(p.walls.length, 2);
 });
+
+test('cotes superposées : empilées automatiquement, déplaçables à la main', () => {
+  const p = emptyPlan();
+  rect(p, 0, 0, 600, 300, 20);
+  const wa = p.walls.find((w) => p.nodes[w.a].x === 0 && p.nodes[w.b].x === 0).id;
+  const wb = p.walls.find((w) => p.nodes[w.a].x === 600 && p.nodes[w.b].x === 600).id;
+  const m1 = addMeasure(p, { x: 10, y: 100, walls: [wa] }, { x: 590, y: 100, walls: [wb] });
+  const m2 = addMeasure(p, { x: 10, y: 180, walls: [wa] }, { x: 590, y: 180, walls: [wb] });
+  const placed = [];
+  const d1 = measureDim(p, m1, 1, placed), d2 = measureDim(p, m2, 1, placed);
+  const gap = Math.abs((d2.A2.x - d1.A2.x) * d1.nx + (d2.A2.y - d1.A2.y) * d1.ny);
+  assert.ok(gap >= 14, `lignes de cote distinctes (${gap})`);
+  m2.d = 500; m2.s = 0.25;
+  const d3 = measureDim(p, m2, 1, []);
+  assert.ok(Math.abs(d3.D - 500) < 0.01, 'distance manuelle respectée');
+  assert.ok(Math.abs((d3.mid.x - d3.A2.x) * d3.ux + (d3.mid.y - d3.A2.y) * d3.uy - 0.25 * d3.len) < 0.5, 'position du chiffre respectée');
+});

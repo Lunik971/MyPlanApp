@@ -408,10 +408,11 @@ export function renderPlan(ctx, W, H, plan, rooms, view, o = {}) {
 
   // mesures conservées : cotes reportées hors du plan avec pointillés aux extrémités
   if (o.dims) {
+    const placed = [];
     for (const m of plan.measures || []) {
+      const d = measureDim(plan, m, S, placed);
       if (o.meas && m.id === o.activeMeasure) continue;
       if (o.dimsLocked && !o.isMeasureLocked?.(m.id)) continue;
-      const d = measureDim(plan, m, S);
       if (!d) continue;
       const on = sel?.type === 'measure' && sel.id === m.id;
       const col = on ? BLUE : '#5b7db8';

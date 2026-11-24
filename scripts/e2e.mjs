@@ -234,6 +234,27 @@ try {
   ok(moves.every((m) => Math.abs(m - moves[0]) < 0.6) && Math.abs(moves[0]) > 5, `tout le mur entier se déplace parallèlement (${moves.map((m) => Math.round(m)).join(' / ')} cm)`);
   await ev(() => { window.__app.editor.undo(); window.__app.editor.select(null); });
 
+  const mdrag = await ev(() => {
+    const e = window.__app.editor, G = window.__app.G;
+    e.setTool('select'); e.select(null);
+    const m = e.plan.measures[0];
+    if (!m) return null;
+    let d = G.measureDim(e.plan, m, e.view.s, []);
+    e.ensureVisible(d.mid, 140);
+    d = G.measureDim(e.plan, m, e.view.s, []);
+    const sp = e.toScreen(d.mid), r = e.canvas.getBoundingClientRect();
+    return { id: m.id, x: r.left + sp.x, y: r.top + sp.y, nx: d.nx, ny: d.ny, s: e.view.s };
+  });
+  if (mdrag) {
+    await page.mouse.move(mdrag.x, mdrag.y); await page.mouse.down();
+    await page.mouse.move(mdrag.x + mdrag.nx * 20, mdrag.y + mdrag.ny * 20, { steps: 5 });
+    await page.mouse.move(mdrag.x + mdrag.nx * 40, mdrag.y + mdrag.ny * 40, { steps: 5 });
+    await page.mouse.up();
+    const md = await ev((id) => { const m = window.__app.editor.plan.measures.find((q) => q.id === id); return { d: m.d, s: m.s }; }, mdrag.id);
+    ok(typeof md.d === 'number', `la cote se déplace à la main (d = ${md.d} cm)`);
+    await ev(() => window.__app.editor.undo());
+  }
+
   console.log('Nom de pièce & meuble');
   await refit();
   await tapPlan(120, 200);

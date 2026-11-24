@@ -367,11 +367,15 @@ export class Editor {
       if (Math.abs(along) <= o.w / 2 + 6 / S && Math.abs(across) <= Math.max(g.t / 2, 10 / S)) return { type: 'opening', id: o.id };
     }
     if (plan.settings.dims) {
+      const placed = [];
       for (const m of plan.measures || []) {
-        const d = G.measureDim(plan, m, S);
+        const d = G.measureDim(plan, m, S, placed);
         if (!d) continue;
         const sp = this.toScreen(d.mid), cp = this.toScreen(p);
         if (Math.abs(sp.x - cp.x) < 32 && Math.abs(sp.y - cp.y) < 13) return { type: 'measure', id: m.id };
+        // ou la ligne de cote elle-même
+        const pr = G.projectToSegment(p, d.A2, d.B2);
+        if (pr.d * S < 9) return { type: 'measure', id: m.id };
       }
     }
     if (plan.settings.dims) {
@@ -495,7 +499,11 @@ export class Editor {
         g.kind = 'dragFurniture'; g.orig = { x: f.x, y: f.y }; return;
       }
       if (h.type === 'opening') { this.select({ type: 'opening', id: h.id }); g.kind = 'dragOpening'; return; }
-      if (h.type === 'measure') { g.kind = 'pan'; return; }
+      if (h.type === 'measure') { // toucher : sélectionner ; glisser : déplacer la cote (distance et position)
+        this.select({ type: 'measure', id: h.id });
+        g.kind = 'dragMeasure'; g.m = this.plan.measures.find((q) => q.id === h.id);
+        return;
+      }
       if (h.type === 'label') { g.kind = 'pan'; return; } // toucher un chiffre sélectionne ce mur et cette face
       if (h.type === 'node') { g.kind = 'dragNode'; g.node = h.id; g.orig = { ...this.plan.nodes[h.id] }; return; }
       if (h.type === 'wall') {
@@ -599,6 +607,17 @@ export class Editor {
         this.hooks.live?.();
         break;
       }
+      case 'dragMeasure': {
+        if (!g.moved) break;
+        if (!g.snap) { this.snapshot(); g.snap = true; }
+        const e2 = G.measureEnds(plan, g.m);
+        if (!e2) break;
+        const L = G.dist(e2.A, e2.B) || 1, ux = (e2.B.x - e2.A.x) / L, uy = (e2.B.y - e2.A.y) / L;
+        g.m.d = G.round1((p.x - e2.A.x) * -uy + (p.y - e2.A.y) * ux);
+        g.m.s = Math.round((((p.x - e2.A.x) * ux + (p.y - e2.A.y) * uy) / L) * 100) / 100;
+        this.draw();
+        break;
+      }
       case 'dragWall': {
         if (!g.moved) break;
         if (!g.snap) { this.snapshot(); g.snap = true; }
@@ -656,7 +675,7 @@ export class Editor {
           this.afterChange();
         }
         break;
-      case 'dragWall': case 'dragFurniture': case 'dragOpening': case 'rotate':
+      case 'dragMeasure': case 'dragWall': case 'dragFurniture': case 'dragOpening': case 'rotate':
         if (g.snap && this.guardLocks()) this.afterChange();
         break;
       case 'wallPlace': this.commitPoint(); break;
@@ -840,6 +859,14 @@ export class Editor {
     G.upsertLock(this.plan, { kind: 'measure', measure: mm.id, len });
     this.afterChange();
     return true;
+  }
+
+  resetMeasurePlacement() {
+    const mm = this.sel?.type === 'measure' ? this.selected : null;
+    if (!mm) return;
+    this.snapshot();
+    delete mm.d; delete mm.s;
+    this.afterChange();
   }
 
   toggleSelectedMeasureLock() {

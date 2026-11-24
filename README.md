@@ -72,7 +72,7 @@ Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre,
 
 ## Version
 
-Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.5.0 → vX dispo » : rechargez (Ctrl+F5).
+Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.5.1 → vX dispo » : rechargez (Ctrl+F5).
 
 **Ajustement des murs** : corriger une longueur répartit par défaut la différence des deux côtés du mur (réglable dans « Options » : « Des 2 côtés » ou un côté fixe). Les murs presque perpendiculaires (±15°) qui s'y accrochent se déplacent parallèlement à eux-mêmes, sans pencher. Pareil pour l'outil Mesure (« Des 2 côtés » par défaut).
 
@@ -83,3 +83,5 @@ Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Versio
 **Tracé droit** : en traçant un mur, la direction se verrouille à l'horizontale/verticale (12° de tolérance) ou à 45° (5°). Des segments tracés à la suite sur une même ligne (à 2,5 cm / 5° près) sont fusionnés en un seul mur ; un vrai coude reste un coude.
 
 **Mur entier** : un double toucher sur un mur coupé par des cloisons sélectionne tout le mur (ou bouton « ↔ Sélectionner le mur entier » dans le panneau). Glissé, il se déplace en entier, parallèlement à lui-même. Un toucher ailleurs revient au segment seul.
+
+**Cotes déplaçables** : les mesures qui se superposent sont empilées automatiquement. Glissez le chiffre ou la ligne d'une mesure (outil Sélection) pour la rapprocher, l'éloigner ou la faire glisser le long de sa ligne ; « ↺ Position automatique » la remet en place.
