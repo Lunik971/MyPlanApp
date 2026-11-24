@@ -324,19 +324,19 @@ export class Editor {
       if (locked) {
         const horiz = Math.abs(Math.sin(ang)) < 1e-6, vert = Math.abs(Math.cos(ang)) < 1e-6;
         for (const n of Object.values(plan.nodes)) {
-          if (horiz && Math.abs(res.x - n.x) < 8 / S) { res.x = n.x; res.guides.push({ x: n.x }); break; }
-          if (vert && Math.abs(res.y - n.y) < 8 / S) { res.y = n.y; res.guides.push({ y: n.y }); break; }
+          if (horiz && Math.abs(res.x - n.x) < 12 / S) { res.x = n.x; res.guides.push({ x: n.x }); break; }
+          if (vert && Math.abs(res.y - n.y) < 12 / S) { res.y = n.y; res.guides.push({ y: n.y }); break; }
         }
       }
     } else {
       res.x = Math.round(p.x / step) * step; res.y = Math.round(p.y / step) * step;
       for (const [id, n] of Object.entries(plan.nodes)) {
         if (id === exclude) continue;
-        if (Math.abs(p.x - n.x) < 8 / S) { res.x = n.x; res.guides.push({ x: n.x }); break; }
+        if (Math.abs(p.x - n.x) < 12 / S) { res.x = n.x; res.guides.push({ x: n.x }); break; }
       }
       for (const [id, n] of Object.entries(plan.nodes)) {
         if (id === exclude) continue;
-        if (Math.abs(p.y - n.y) < 8 / S) { res.y = n.y; res.guides.push({ y: n.y }); break; }
+        if (Math.abs(p.y - n.y) < 12 / S) { res.y = n.y; res.guides.push({ y: n.y }); break; }
       }
     }
     res.x = G.round1(res.x); res.y = G.round1(res.y);
@@ -969,11 +969,26 @@ export class Editor {
     G.insertWall(this.plan, d.last.x, d.last.y, x, y, this.plan.settings.wallT);
     G.mergeCollinear(this.plan); // des petits segments alignés ne font plus qu'un seul grand mur
     d.last = { x, y }; d.count++;
+    const moved = this.autoStraighten(d.last);
+    if (moved) { d.last = moved; if (d.first && G.dist(d.first, { x, y }) < 6) d.first = { ...moved }; }
     const closed = d.count >= 2 && d.first && G.dist(d.first, d.last) < 1;
     d.preview = null; d.guides = [];
     this.ensureVisible(d.last);
     this.afterChange();
     if (closed) { this.finishDraft(); this.hooks.toast?.('Pièce fermée'); } else this.hooks.draft?.(d);
+  }
+
+  // Rattrape tout seul les petits décalages (≤ ~4°, quelques cm) : points alignés sur la même ligne,
+  // sans toucher aux cotes verrouillées. Renvoie la nouvelle position du point `near` s'il a bougé.
+  autoStraighten(near) {
+    const copy = G.normalizePlan(JSON.parse(JSON.stringify(this.plan)));
+    let nid = null, nd = 6;
+    for (const [id, n] of Object.entries(copy.nodes)) { const dd = G.dist(n, near); if (dd < nd) { nd = dd; nid = id; } }
+    const st = G.cleanPlan(copy, { angleDeg: 4, shortCm: 0, snapCm: 1.5 });
+    if (!st.merged && !st.straightened) return null;
+    if (this.plan.locks?.length && G.brokenLocks(this.plan, copy)) return null;
+    this.plan = copy;
+    return nid && copy.nodes[nid] ? { x: copy.nodes[nid].x, y: copy.nodes[nid].y } : null;
   }
 
   // Longueur saisie au clavier : prolonge dans la direction visée

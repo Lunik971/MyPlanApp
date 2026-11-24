@@ -243,6 +243,21 @@ try {
     return { x: out && out.x, expect: x0 + t / 2 };
   });
   ok(snapIn.x != null && Math.abs(snapIn.x - snapIn.expect) < 0.6, `Mesure : un toucher sur la face extérieure s'accroche au bord intérieur (${snapIn.x} / ${snapIn.expect})`);
+  const auto = await ev(() => {
+    const e = window.__app.editor, G = window.__app.G;
+    const before = JSON.stringify(e.plan);
+    // petit décalage de 2 cm sur un point de mur droit, rattrapé automatiquement
+    const w = e.plan.walls.find((q) => Math.abs(e.plan.nodes[q.a].y - e.plan.nodes[q.b].y) < 0.01 && Math.abs(e.plan.nodes[q.a].x - e.plan.nodes[q.b].x) > 100);
+    const nb = e.plan.nodes[w.b];
+    const y0 = nb.y;
+    nb.y += 2;
+    const moved = e.autoStraighten({ x: nb.x, y: nb.y });
+    const w2 = e.plan.walls.find((q) => q.id === w.id);
+    const out = { moved: !!moved, dy: Math.abs(e.plan.nodes[w2.a].y - e.plan.nodes[w2.b].y) };
+    e.plan = G.normalizePlan(JSON.parse(before)); e.afterChange();
+    return out;
+  });
+  ok(auto.moved && auto.dy < 0.1, `un décalage de 2 cm est rattrapé tout seul (${auto.dy})`);
   const mdrag = await ev(() => {
     const e = window.__app.editor, G = window.__app.G;
     e.setTool('select'); e.select(null);
