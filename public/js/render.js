@@ -75,7 +75,7 @@ function drawDoorSymbol(ctx, g, o, S, X, Y) {
     const q = o.w / 4;
     leaf(c.x - ux * q, c.y - uy * q, ux, uy, q);
     leaf(c.x + ux * q, c.y + uy * q, -ux, -uy, q);
-  } else if (o.kind === 'double') {
+  } else if (o.kind === 'double' || o.kind === 'doubleglass') {
     leaf(c.x - ux * half, c.y - uy * half, ux, uy, half);
     leaf(c.x + ux * half, c.y + uy * half, -ux, -uy, half);
   } else {
@@ -139,10 +139,11 @@ function drawOpeningSymbol(ctx, g, o, S, X, Y) {
     for (const m of [-half / 2, 0, half / 2]) seg(m, t / 2, m, -t / 2);
     ctx.stroke();
     drawDoorSymbol(ctx, g, o, S, X, Y);
-  } else if (o.kind === 'door' || o.kind === 'double') {
+  } else if (o.kind === 'door' || o.kind === 'double' || o.kind === 'doubleglass') {
     // seuil
     ctx.lineWidth = 1.8;
     ctx.beginPath(); seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2); ctx.stroke();
+    if (o.kind === 'doubleglass') { ctx.beginPath(); ctx.strokeStyle = '#7fb0ee'; ctx.lineWidth = 1.5; seg(-half, 0, half, 0); ctx.stroke(); } // vitrage
     drawDoorSymbol(ctx, g, o, S, X, Y);
   } else if (o.kind === 'arch' || o.kind === 'frame' || o.kind === 'opening') {
     // bande teintée : le passage reste visible même sans vantail

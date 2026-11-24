@@ -49,6 +49,28 @@ export async function createView3D(container) {
   const matEdge = new THREE.LineBasicMaterial({ color: 0x8b95a5 });
   const matGlass = new THREE.MeshStandardMaterial({ color: 0x9cc7f0, transparent: true, opacity: 0.35, roughness: 0.1 });
   const matDoor = new THREE.MeshStandardMaterial({ color: 0xb9824f, roughness: 0.7 });
+  const matFrame = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 });
+
+  // vantail vitré façon menuiserie : montants + traverses blancs, grand vitrage en haut, panneau plein en bas
+  function glazedLeaf(len, hh) {
+    const g = new THREE.Group();
+    const bar = (w, h, d, x, y, mat = matFrame) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, 0);
+      m.castShadow = true;
+      g.add(m);
+    };
+    const st = Math.min(6, len / 4), th = 5;
+    const mid = hh * 0.3;                                   // hauteur du panneau plein
+    bar(st, hh, th, -len / 2 + st / 2, hh / 2);             // montants
+    bar(st, hh, th, len / 2 - st / 2, hh / 2);
+    bar(len, 7, th, 0, hh - 3.5);                           // traverse haute
+    bar(len, 6, th, 0, 3);                                  // traverse basse
+    bar(len - 2 * st, 7, th, 0, mid);                       // traverse intermédiaire
+    bar(len - 2 * st, mid - 9, 3, 0, (mid + 3) / 2 + 0.2);  // panneau plein du bas
+    bar(len - 2 * st, hh - mid - 14, 1.2, 0, (mid + 3.5 + hh - 7) / 2, matGlass); // vitrage
+    return g;
+  }
 
   const resize = () => {
     const w = container.clientWidth || 300, h = container.clientHeight || 300;
@@ -63,7 +85,7 @@ export async function createView3D(container) {
     grp.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material && o.material.map) o.material.map.dispose();
-      if (o.material && !o.material.isShared && o.material.dispose && ![matWall, matEdge, matGlass, matDoor].includes(o.material)) o.material.dispose();
+      if (o.material && o.material.dispose && ![matWall, matEdge, matGlass, matDoor, matFrame].includes(o.material)) o.material.dispose();
     });
     grp.clear();
   };
@@ -149,28 +171,33 @@ export async function createView3D(container) {
         if (sill > 0) add(wallBox(wi, w.t, s0, s1, 0, sill));
         if (top < wallH) add(wallBox(wi, w.t, s0, s1, top, wallH));
         const isWin = o.kind === 'window' || o.kind === 'bay';
+        const half = o.w / 2, cx = wi.a.x + wi.ux * o.pos, cy = wi.a.y + wi.uy * o.pos;
         if (o.kind === 'frenchwin') {
-          // porte-fenêtre : grand vitrage, montants et traverses blancs (PVC) aux 4 vantaux
-          const fh = Math.min(o.h, wallH), fw = 6, x0 = o.pos - o.w / 2, x1 = o.pos + o.w / 2;
-          add(wallBox(wi, 2, x0, x1, 0, fh, matGlass, false));
-          for (const m of [0, 0.25, 0.5, 0.75, 1]) add(wallBox(wi, 7, x0 + m * o.w - fw / 2, x0 + m * o.w + fw / 2, 0, fh, matWall));
-          add(wallBox(wi, 7, x0, x1, fh - fw, fh, matWall));
-          add(wallBox(wi, 7, x0, x1, 0, fw, matWall));
+          // 4 vantaux fermés : partie basse pleine (panneau) + vitrage, cadres blancs
+          const fh = Math.min(o.h, wallH), q = o.w / 4;
+          for (let i = 0; i < 4; i++) {
+            const gl = glazedLeaf(q, fh);
+            const sm = o.pos - half + (i + 0.5) * q;
+            gl.position.set(wi.a.x + wi.ux * sm, 0, wi.a.y + wi.uy * sm);
+            gl.rotation.y = -Math.atan2(wi.uy, wi.ux);
+            content.add(gl);
+          }
         } else if (isWin) add(wallBox(wi, 2, s0, s1, sill, top, matGlass, false));
-        else if (o.kind === 'door' || o.kind === 'double') {
+        else if (o.kind === 'door' || o.kind === 'double' || o.kind === 'doubleglass') {
           // vantail(s) ouvert(s) à 90°, côté « side » (comme le symbole en 2D)
           const side = o.side || 1, hh = Math.min(o.h, wallH);
+          const glazed = o.kind === 'doubleglass';
           const leaf = (hx, hy, len) => {
-            const geo = new THREE.BoxGeometry(len, hh, 4);
-            const m = new THREE.Mesh(geo, matDoor);
-            m.castShadow = true;
+            let m;
+            if (glazed) m = glazedLeaf(len, hh);
+            else { m = new THREE.Mesh(new THREE.BoxGeometry(len, hh, 4), matDoor); m.castShadow = true; m.position.y = hh / 2; }
             // le vantail ouvert part de la charnière, perpendiculaire au mur, du côté « side »
-            m.position.set(hx + wi.nx * side * len / 2, hh / 2, hy + wi.ny * side * len / 2);
+            m.position.x = hx + wi.nx * side * len / 2;
+            m.position.z = hy + wi.ny * side * len / 2;
             m.rotation.y = -Math.atan2(wi.ny * side, wi.nx * side);
             content.add(m);
           };
-          const cx = wi.a.x + wi.ux * o.pos, cy = wi.a.y + wi.uy * o.pos, half = o.w / 2;
-          if (o.kind === 'double') {
+          if (o.kind === 'double' || glazed) {
             leaf(cx - wi.ux * half, cy - wi.uy * half, half);
             leaf(cx + wi.ux * half, cy + wi.uy * half, half);
           } else {
