@@ -66,13 +66,13 @@ Calque photo/PDF d'un plan existant à mettre à l'échelle, OIDC (Authentik), p
 
 ## Portes
 
-Portes simple/double (zone de débattement teintée, vantail en bleu), fenêtre, baie vitrée, ouverture, **arche** et **cadre sans porte**. Choisissez le type dans l'outil « Porte / fenêtre » ou en touchant une ouverture existante.
+Portes simple/double, porte-fenêtre 4 vantaux (zone de débattement teintée, vantail en bleu), fenêtre, baie vitrée, ouverture, **arche** et **cadre sans porte**. Choisissez le type dans l'outil « Porte / fenêtre » ou en touchant une ouverture existante.
 
 **Mesures conservées** : une mesure posée avec l'outil Mesure reste sur le plan, reportée hors du bâtiment (ligne de cote parallèle, pointillés à chaque extrémité). Elle suit les murs quand ils bougent. Touchez son chiffre (outil Sélection) pour la supprimer ; le bouton ⟷ masque aussi les mesures.
 
 ## Version
 
-Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.7.1 → vX dispo » : rechargez (Ctrl+F5).
+Le numéro s'affiche en bas à droite de l'écran et dans le menu ⋮ (« Version x.y.z »). Pour une nouvelle version, mettre à jour `package.json`, `public/js/version.js` et le nom du cache dans `public/sw.js`. Si le serveur est plus récent que la page chargée, l'indicateur affiche « v0.7.2 → vX dispo » : rechargez (Ctrl+F5).
 
 **Ajustement des murs** : corriger une longueur répartit par défaut la différence des deux côtés du mur (réglable dans « Options » : « Des 2 côtés » ou un côté fixe). Les murs presque perpendiculaires (±15°) qui s'y accrochent se déplacent parallèlement à eux-mêmes, sans pencher. Pareil pour l'outil Mesure (« Des 2 côtés » par défaut).
 

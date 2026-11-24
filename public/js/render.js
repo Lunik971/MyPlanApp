@@ -70,7 +70,12 @@ function drawDoorSymbol(ctx, g, o, S, X, Y) {
     ctx.lineWidth = 2.4; ctx.strokeStyle = BLUE; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
     ctx.beginPath(); ctx.arc(X(hx), Y(hy), 2.6, 0, Math.PI * 2); ctx.fillStyle = BLUE; ctx.fill();
   };
-  if (o.kind === 'double') {
+  if (o.kind === 'frenchwin') {
+    // 4 vantaux : 2 fixes sur les côtés, 2 ouvrants au centre (charnières aux montants centraux)
+    const q = o.w / 4;
+    leaf(c.x - ux * q, c.y - uy * q, ux, uy, q);
+    leaf(c.x + ux * q, c.y + uy * q, -ux, -uy, q);
+  } else if (o.kind === 'double') {
     leaf(c.x - ux * half, c.y - uy * half, ux, uy, half);
     leaf(c.x + ux * half, c.y + uy * half, -ux, -uy, half);
   } else {
@@ -122,7 +127,19 @@ function drawOpeningSymbol(ctx, g, o, S, X, Y) {
   const P = (a, b) => [X(c.x + ux * a + nx * b), Y(c.y + uy * a + ny * b)];
   const seg = (a1, b1, a2, b2) => { const p = P(a1, b1), q = P(a2, b2); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); };
   ctx.lineWidth = 1.2; ctx.strokeStyle = WALL_LINE; ctx.lineJoin = 'round';
-  if (o.kind === 'door' || o.kind === 'double') {
+  if (o.kind === 'frenchwin') {
+    // cadre vitré façon porte-fenêtre : traits de vitrage + montants, puis vantaux ouvrants au centre
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    seg(-half, t / 2, half, t / 2); seg(-half, -t / 2, half, -t / 2);
+    seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2);
+    ctx.stroke();
+    ctx.beginPath(); ctx.strokeStyle = '#7fb0ee'; ctx.lineWidth = 1.5; seg(-half, 0, half, 0); ctx.stroke();
+    ctx.beginPath(); ctx.strokeStyle = WALL_LINE; ctx.lineWidth = 1.6;
+    for (const m of [-half / 2, 0, half / 2]) seg(m, t / 2, m, -t / 2);
+    ctx.stroke();
+    drawDoorSymbol(ctx, g, o, S, X, Y);
+  } else if (o.kind === 'door' || o.kind === 'double') {
     // seuil
     ctx.lineWidth = 1.8;
     ctx.beginPath(); seg(-half, t / 2, -half, -t / 2); seg(half, t / 2, half, -t / 2); ctx.stroke();

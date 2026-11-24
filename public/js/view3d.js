@@ -149,7 +149,14 @@ export async function createView3D(container) {
         if (sill > 0) add(wallBox(wi, w.t, s0, s1, 0, sill));
         if (top < wallH) add(wallBox(wi, w.t, s0, s1, top, wallH));
         const isWin = o.kind === 'window' || o.kind === 'bay';
-        if (isWin) add(wallBox(wi, 2, s0, s1, sill, top, matGlass, false));
+        if (o.kind === 'frenchwin') {
+          // porte-fenêtre : grand vitrage, montants et traverses blancs (PVC) aux 4 vantaux
+          const fh = Math.min(o.h, wallH), fw = 6, x0 = o.pos - o.w / 2, x1 = o.pos + o.w / 2;
+          add(wallBox(wi, 2, x0, x1, 0, fh, matGlass, false));
+          for (const m of [0, 0.25, 0.5, 0.75, 1]) add(wallBox(wi, 7, x0 + m * o.w - fw / 2, x0 + m * o.w + fw / 2, 0, fh, matWall));
+          add(wallBox(wi, 7, x0, x1, fh - fw, fh, matWall));
+          add(wallBox(wi, 7, x0, x1, 0, fw, matWall));
+        } else if (isWin) add(wallBox(wi, 2, s0, s1, sill, top, matGlass, false));
         else if (o.kind === 'door' || o.kind === 'double') {
           // vantail(s) ouvert(s) à 90°, côté « side » (comme le symbole en 2D)
           const side = o.side || 1, hh = Math.min(o.h, wallH);

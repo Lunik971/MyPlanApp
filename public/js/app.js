@@ -605,7 +605,7 @@ function wallPanel() {
 
 function openingPanel() {
   const cur = () => editor.selected;
-  const isDoor = () => ['door', 'double'].includes(cur().kind);
+  const isDoor = () => ['door', 'double', 'frenchwin'].includes(cur().kind);
   const kinds = h('div', { class: 'chips' });
   for (const [k, d] of Object.entries(G.OPENING_KINDS)) kinds.append(h('button', { class: 'chip' + (cur().kind === k ? ' on' : ''), onclick: () => editor.updateOpening({ kind: k }) }, d.label));
   const showSill = cur().kind === 'window' || cur().kind === 'bay';
